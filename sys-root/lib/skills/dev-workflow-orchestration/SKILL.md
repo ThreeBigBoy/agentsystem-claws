@@ -216,17 +216,9 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 
 ---
 
-## 八、MCP 服务调用机制
+## 八、质量门禁执行方式
 
-### 调用方
-
-**会话 Agent** 是唯一的调用方，不应由人工用户直接调用 MCP 工具。
-
-### 调用时机
-
-Agent 在 dev-workflow-orchestration 技能判断"当前阶段已完成，需要进入下一阶段"时，自主调用 MCP 质量门禁工具。
-
-### 调用链路
+### 调用链路（简化版）
 
 ```
 Agent (dev-workflow-orchestration)
@@ -236,51 +228,52 @@ Agent (dev-workflow-orchestration)
     ├─→ 确认准入条件满足
     │
     ▼
-Agent 调用 MCP 工具: quality-gates.<gate_name>
-    │
-    ▼
-MCP Server (mcp_server.py)
-    │
-    ├─→ 自动发现 change-id（从 cwd 向上查找 openspec/changes/）
-    ├─→ 动态构建检查脚本路径
-    │
-    ▼
-check_*.py (执行实际门禁检查)
+Agent 直接调用 Python 脚本:
+    python check_<gate>.py <参数> --config <config.yaml> --json
 ```
 
 ### Gate 与 Step 对应关系
 
-| Step | 阶段 | 应调用的 Gate | MCP 工具 |
-|------|------|--------------|----------|
-| 1 | 需求分析 | 无 | - |
-| 2 | PRD评审 | Gate-PRD | `quality-gates.check_prd` |
-| 3 | 技术方案 | 无 | - |
-| 4 | 方案评审 | Gate-DESIGN | `quality-gates.check_solution` |
-| 5 | 编码实现 | 无 | - |
-| 6 | 代码评审 | Gate-CODE | `quality-gates.check_code` |
-| 7 | 功能验收 | 无 | - |
-| 8 | 归档 | Gate-DELIVERY | `quality-gates.check_delivery` |
+| Step | 阶段 | 应调用的脚本 | 说明 |
+|------|------|-------------|------|
+| 2 | PRD评审 | `check_prd.py` | PRD 质量门禁 |
+| 4 | 方案评审 | `check_solution.py` | 方案质量门禁 |
+| 6 | 代码评审 | `check_code.py` | 代码质量门禁 |
+| 8 | 归档 | `check_delivery.py` | 交付质量门禁 |
+
+### 脚本路径
+
+所有门禁脚本位于 Skill 的 references 目录下：
+```
+sys-root/lib/skills/dev-workflow-orchestration/references/quality-gates/
+├── config.yaml           # 门禁配置
+├── check_prd.py         # PRD 质量门禁
+├── check_solution.py     # 方案质量门禁
+├── check_code.py        # 代码质量门禁
+├── check_delivery.py    # 交付质量门禁
+├── run_gates.py         # 统一入口
+├── model_selector.py    # 模型选择器
+├── llm_enhancer.py     # LLM 增强
+└── prompts/            # LLM Prompt 模板
+```
 
 ### Agent 调用约定
 
 1. **调用前**：确认当前阶段已完成，准入条件满足
-2. **调用时**：直接调用 `quality-gates.check_xxx`，无需传递参数
+2. **调用时**：使用 `subprocess.run()` 直接执行 Python 脚本
 3. **调用后**：解析返回的 JSON 结果，判断门禁是否通过
 4. **不通过时**：按照评审修复循环执行修复后再调用
 
-### MCP Server 自动发现逻辑
+### 自动发现逻辑
 
-MCP Server 会自动：
+脚本会自动：
 1. 从当前工作目录向上查找 `openspec/changes/<change-id>`
 2. 根据 change-id 构建正确的文件路径
-3. 调用对应的 check_*.py 脚本
+3. 读取 config.yaml 获取模型路由配置
 
-### gate_status 工具
+### gate_status 查询
 
-用于查询当前项目状态：
-```python
-quality-gates.gate_status  # 返回 { change_id, current_phase, next_gate }
-```
+使用 `run_gates.py status` 或直接分析 tasks.md 判断当前阶段
 
 ---
 

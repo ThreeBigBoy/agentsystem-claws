@@ -6,10 +6,10 @@ models:
   config_path: "/Users/billhu/agentsystem/sys-root/config/models.json"
   # 任务路由：任务 -> 模型ID（对应 models.json 中的 key）
   routing:
-    prd_review: "deepseek-v3.2"      # PRD 评审
-    solution_review: "deepseek-v3.2" # 方案评审
-    code_review: "qwen-8b"           # 代码评审
-    default: "qwen-8b"               # 默认模型
+    prd_review: "kimi-k2.5"
+    solution_review: "kimi-k2.5"
+    code_review: "minimax-m2.7"
+    default: "qwen3-8b"
 
 quality_gates:
   prd:
