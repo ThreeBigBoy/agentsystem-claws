@@ -1,0 +1,69 @@
+# Hybrid 质量门禁配置
+# 模型配置引用 sys-root/config/models.json
+
+# 模型选择配置
+models:
+  config_path: "/Users/billhu/agentsystem/sys-root/config/models.json"
+  # 任务路由：任务 -> 模型ID（对应 models.json 中的 key）
+  routing:
+    prd_review: "deepseek-v3.2"      # PRD 评审
+    solution_review: "deepseek-v3.2" # 方案评审
+    code_review: "qwen-8b"           # 代码评审
+    default: "qwen-8b"               # 默认模型
+
+quality_gates:
+  prd:
+    enabled: true
+    threshold: 80
+    strictness: "blocking"  # blocking | warning
+    weights:
+      structure: 0.30
+      keywords: 0.25
+      traceability: 0.20
+      logic_completeness: 0.15
+      design_rationality: 0.10
+    python_weight: 0.60
+    llm_weight: 0.40
+
+  solution:
+    enabled: true
+    threshold: 75
+    strictness: "warning"
+    weights:
+      prd_alignment: 0.35
+      interface_clarity: 0.25
+      tech_stack: 0.20
+      risk_identification: 0.15
+      feasibility: 0.05
+    python_weight: 0.70
+    llm_weight: 0.30
+
+  code:
+    enabled: true
+    threshold: 80
+    strictness: "blocking"
+    weights:
+      functionality: 0.40
+      security: 0.25
+      linting: 0.15
+      test_coverage: 0.15
+      logic_review: 0.05
+    python_weight: 0.95
+    llm_weight: 0.05
+
+  delivery:
+    enabled: true
+    threshold: 85
+    strictness: "blocking"
+    weights:
+      checklist: 0.40
+      deployable: 0.30
+      documentation: 0.15
+      changelog: 0.10
+      human_confirmation: 0.05
+
+output:
+  format: "json"  # json | markdown
+  verbose: true
+  save_history: true
+  history_dir: "./history"

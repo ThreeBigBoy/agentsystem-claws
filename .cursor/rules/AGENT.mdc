@@ -1,0 +1,96 @@
+---
+description: Agent 执行任务前必须读取业务项目 AGENTS.md（Hybrid）；本仓 agentsystem 自身演进除外
+alwaysApply: true
+---
+
+## 适用范围（先判定再执行）
+
+### 本仓路径别名（写死，任一命中即视为「本仓 agentsystem」）
+
+以下路径指向**同一仓库**时，均按 **本仓** 判定（不执行业务项目的 AGENTS.md / `quick_enforce` 流水线）：
+
+| 别名 | 说明 |
+|------|------|
+| `/Users/billhu/agentsystem` | 本机绝对路径（主） |
+| `~/agentsystem` | 用户主目录下约定目录（`$HOME/agentsystem`） |
+| `$HOME/agentsystem` | 与 `~/agentsystem` 等价 |
+
+**判定**：当前 Cursor **工作区根目录**解析后的绝对路径（或用户明确给出的仓库根路径）**等于**上述任一别名（将 `~` 展开为 `$HOME` 后再比较）即视为本仓。
+
+### 范围表
+
+| 工作范围 | 判定线索 | 是否执行下方「业务项目核心约定」 |
+|----------|----------|----------------------------------|
+| **本仓 `agentsystem`** | 用户明确在改治理内核/脚本/文档；或工作区根命中 **本仓路径别名** 表，且改动目标在本仓内 | **否** — 不强制读取 `workspace/{project}/claw-config/AGENTS.md`，不调用 `quick_enforce` |
+| **业务项目 project** | 用户针对某业务项目（如 curiobuddy）提需求；或工作目录在 `workspace/{project}` 及其 `claw-config` 所链到的仓库；或用户给出 project 名 | **是** — 强制必须执行全文「业务项目核心约定」与执行流程 |
+
+> **原则**：`agentsystem` 是**多项目治理与门禁壳**；其自身演进按本仓 `README.md`、`docs/` 与脚本说明即可，**不套用**面向业务项目的 `claw-config/AGENTS.md` 流水线。
+
+---
+
+## 业务项目核心约定（仅业务项目）
+
+执行任务前，**必须**强制读取并理解该业务项目在 `claw-config/` 下的 `AGENTS.md` 配置。
+
+## 执行流程（仅业务项目）
+
+### 步骤 1：识别 Project
+从以下信息识别当前 project：
+- 用户明确的 project 名称
+- change-id 中包含的 project 标识
+- 当前工作目录上下文（若在 `workspace/{name}/` 下则取 `{name}`）
+
+### 步骤 2：读取 AGENTS.md
+读取路径：`/Users/billhu/agentsystem/workspace/{project}/claw-config/AGENTS.md`
+
+**说明**：
+- `workspace/{project}/` 下通常**只有**指向项目仓库内 `claw-config/` 的软链（名称一般为 `claw-config`）。
+- 运行时配置 **`AGENTS.md` 放在项目根下的 `claw-config/` 内**（通过软链在 workspace 侧表现为上述路径）。
+- **同任务后续阅读顺序**（含 openspec、`usr-rules`、`sys-root/lib` 是否按需、是否禁止通读 lib）：**唯一条文**见 `usr-devclaw/user.json` 内 `cursor.agent.read_order_hint` 与 `read_order_notes`；**本规则不重复展开**，以免与 JSON 漂移。
+
+**严格执行动作（强制）**（与 `usr-devclaw/usr-rules/OpenSpec.md` 对齐：先 **运行时索引**，再守 **§2.2 质量闭环**，最后在 **change-id** 下执行 **`dev-workflow-orchestration` 技能）：
+- **运行时索引（任务启动）**：每轮开始处理业务项目相关任务时，**须先同时完整阅读** `claw-config/` 下 **`SOUL.md`、`MEMORY.md`、`SKILLS.md`、`TOOLS.md`**（建立人设、**MEMORY 索引**与工具备忘）。
+- **质量闭环（§2.2 总纲）**：**须严格执行** **10 步闭环**与 **§2.2 三处关键人工确认**（PRD 终稿 / 技术方案终稿 / 归档前确认）；条文以 **`usr-devclaw/usr-rules/OpenSpec.md`**、业务仓库 **`openspec/AGENTS.md` §3** 为准；步骤与技能映射的权威展开见 `MEMORY.md` 所引 P0 **`pattern-complete-quality-closed-loop`**。**评审与终稿分拆**：PRD 与技术方案在 **Step 2 / Step 4** 内须按 **`OpenSpec.md` §2.2.1** 区分 **评审执行（*-R）→ 评审修复环（*-F）→ 人工终稿门禁（Gate-*）**；**不得**把 Agent 评审与「终稿确认」混为一步，**不得**跳过 *-R/*-F 直达 Gate。
+- **change-id 推进**：涉及 **change-id** 时，执行 **`dev-workflow-orchestration` 技能**（见 `sys-root/lib/skills/dev-workflow-orchestration/SKILL.md`），由该技能判断阶段、准入、推进路径与停止线。
+
+### 步骤 3：强制检查（Python 层）
+调用强制检查脚本验证（先将 `sys-root/lib/scripts/agents-md-enforcer` 加入 `PYTHONPATH`，或使用该目录为工作目录）：
+```python
+from agents_md_enforcer import quick_enforce
+
+config = quick_enforce("{project}")
+# 如果未读取 AGENTS.md，会抛出 EnforcementError，阻断执行
+```
+实现上 `agents_md_enforcer` 与 `enforcer` 为同一模块的重导出（见仓库内 `agents_md_enforcer.py`）。
+
+## 安全限制（仅业务项目）
+
+当且仅当本次任务属于**业务项目**范围时：
+- ❌ 无法识别 project → **禁止**改动业务项目内任何文件
+- ❌ 未读取 AGENTS.md → **禁止**改动业务项目内任何文件
+- ❌ AGENTS.md 检查失败 → **禁止**改动业务项目内任何文件
+
+**本仓 `agentsystem`**：不适用以上三条；仍须遵守常规编辑与提交规范，但**不以** `quick_enforce` 为门禁。
+
+## 快速参考
+
+| 操作 | 命令/路径 |
+|------|----------|
+| 列出所有 projects | Python：`AgentsMdEnforcer().list_projects()`（见 enforcer README） |
+| 检查特定 project | `cd .../agents-md-enforcer && python enforcer.py curiobuddy` |
+| 强制检查模块 | `/Users/billhu/agentsystem/sys-root/lib/scripts/agents-md-enforcer/` |
+
+## 示例
+
+**业务项目** — 用户："开始 curiobuddy 的需求分析"
+
+1. ✅ 判定为业务项目范围
+2. ✅ 识别 project: `curiobuddy`
+3. ✅ 读取 `/Users/billhu/agentsystem/workspace/curiobuddy/claw-config/AGENTS.md`
+4. ✅ 调用 `quick_enforce("curiobuddy")` 验证
+5. ✅ 按 AGENTS.md 中的角色执行任务
+
+**本仓** — 用户："改一下 agentsystem 里 enforcer 的路径逻辑"
+
+1. ✅ 判定为本仓 `agentsystem`，**跳过** claw-config / `quick_enforce`
+2. ✅ 直接按本仓文档与代码约定修改并说明变更

@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "description": "本文件为 `sys-root/lib/scripts/` 下各 **脚本/工具包** 的**全局索引（manifest）**：登记脚本 id、目录路径、用途与调用方式摘要，便于检索与自动化集成；具体实现、参数与依赖仍以各子目录内源码与 `README.md` 为准，本文件不重复实现细节。",
+    "version": "1.0",
+    "root_path": "sys-root/lib/scripts",
+    "convention": "每个工具一般为独立子目录（如 `agents-md-enforcer/`），入口可为 `*.py` 或 CLI；Python 路径加入方式见各包说明。"
+  },
+  "entries": []
+}

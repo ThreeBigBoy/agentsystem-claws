@@ -1,0 +1,6 @@
+# agentsystem — sys-root/logs/agent.log
+# 用途：统一追加 **本仓 agentsystem** 与 **全部业务项目**（workspace 下各 project，如 curiobuddy）的 Agent 执行轨迹。
+#      含：门禁、模型路由摘要、任务/会话 id、错误摘要等；**勿**写入密钥与 token。
+# 写入：由 CLI / MCP / 调度脚本按行 append；建议每条带 project 标识便于过滤（如 project=curiobuddy 或 JSON 字段）。
+# 若除本说明外无其它行：表示尚未产生运行记录。
+# ---------- 以下为日志正文（追加区） ----------

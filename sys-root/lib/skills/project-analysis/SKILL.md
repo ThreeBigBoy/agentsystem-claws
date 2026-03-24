@@ -1,0 +1,181 @@
+---
+name: project-analysis
+description: 分析与管理工程结构与技术实现方案；在采用 OpenSpec 的项目中，根据当前需求与已有实现，对项目宪法（openspec/project.md）与工程补充约束（project-rules/）进行梳理与更新，确保架构、技术栈、目录结构与约定清晰、一致且可被后续变更复用。
+---
+
+# 工程结构分析技能（project-analysis）
+
+本技能用于在 OpenSpec 项目中，系统性分析**工程结构与技术实现方案**，并将结论固化到：
+
+- `openspec/project.md`：项目级「宪法规范」，约定项目定位、开发环境、架构模式、技术栈、目录结构、命名与格式等顶层规则。
+- `project-rules/`：作为宪法的**补充约束层**，沉淀核心名词定义、产品与数据模型、关键信息流/数据流、实现约束与最佳实践等。
+- `openspec/changes/[change-id]/`：在已有需求变更提案基础上，补充或校正与工程结构相关的 `proposal.md` / `design.md` / `specs/*` 内容。
+
+**产出物质量约定**：产出的 **design.md（技术方案）**、**project-rules 下文档**以及**技术架构图、执行逻辑图、数据流图**等须符合本技能 **REFERENCE** 中的最小结构与自检，使产出可被前端/后端按图实现、可被 code-review/func-test 对照验证。详见 `agentsystem/skills/project-analysis/REFERENCE/技术方案与架构产出物-最小结构与自检.md`。
+
+当用户输入「分析工程结构」「分析技术实现方案」等指令时，应优先加载本技能，并结合 `request-analysis` 技能的输出进行工作。
+
+---
+
+## 一、触发与前置依赖
+
+- **触发指令示例**：
+  - 「分析工程结构」
+  - 「分析技术实现方案」
+  - 「请检查当前实现是否符合既定架构/技术栈」
+  - 「本次需求对架构有无影响？」
+
+- **前置依赖技能**：
+  - `request-analysis`：已对需求进行初步分析，并在 **`docs/project-prd-changes/[change-id]/`** 与 **`openspec/changes/[change-id]/`** 中产出方案、需求说明与基础变更提案。
+  - （可选）`image-analysis`：若存在架构图、系统交互图、数据流图等，可先用其解析图片，再作为本技能的输入参考。
+
+- **前置资料来源**（至少尝试读取，如不存在则在执行流程中初始化）：
+  - `openspec/project.md`：项目宪法规范。
+  - `project-rules/` 下的各类规则文档（如：核心概念解释、产品架构模型、数据模型、信息流/数据流、实现约束等）。
+  - `openspec/changes/[change-id]/proposal.md` / `design.md` / `specs/*`：由 `request-analysis` 或既有变更产生。
+  - 与当前工程强相关的官方文档与开发规范（例如：平台官方文档、框架文档、SDK 规范等）。
+
+---
+
+## 二、总体工作流程
+
+0. **（可选）加载工程结构相关的长期记忆**  
+   - 在根级 `memory/` 目录下，根据当前项目与宿主筛选与「工程结构」「架构」「project-rules」等标签相关的 pattern / anti-pattern / playbook / reflection 条目；  
+   - 在分析与更新 `openspec/project.md` 和 `project-rules/` 之前，先阅读这些记忆，用于校准本次结构性决策，避免重复踩坑。
+
+1. **读取上下文与需求意图**
+   - 结合用户输入与 `request-analysis` 产出内容，明确：
+     - 当前处于哪个项目（根目录）与工程类型（如：Shopify 主题、Web 应用等）。
+     - 是否已存在本次需求对应的变更目录 `openspec/changes/[change-id]/`；如未给出 change-id，应向用户询问或通过上下文推断（例如沿用最近一次变更）。
+     - 本次变更的范围：仅为功能层改动，还是可能影响架构模式、技术栈、部署方式等。
+
+2. **评估 `openspec/project.md` 是否需要更新**
+   - 如文件**不存在**：根据 OpenSpec 中对 `project.md` 的定义，**初始化**一份项目宪法规范。
+   - 如文件**已存在**：
+     - 对比当前需求与既有架构/技术栈/目录结构：
+       - 若判断为**无重大结构变化**（例如仅在现有层次内增加 Section、页面、接口，不改变整体架构模式），则**跳过结构性更新**，仅在必要时做少量文字修订。
+       - 若存在**架构层调整或新增约束**（如：引入新运行时、新主要框架、跨服务调用、新安全/合规约束等），则**修订或扩展**相应章节。
+
+3. **评估 `project-rules/` 是否需要更新**
+   - 检查该目录下是否已包含与当前工程强相关的：
+     - 核心名词与概念解释。
+     - 产品架构模型（模块/子系统拆分、层级关系）。
+     - 数据概念模型（核心实体、字段、关系）。
+     - 产品全链路关键信息流/数据流。
+     - 开发实现约束与典型最佳实践。
+   - 若内容**完善且与本次需求无本质冲突或结构性变化**，则可仅做引用与交叉检查，不强制更新。
+   - 若内容**缺失或落后于当前需求**，则需：
+     - 初始化对应文档（例如 `shopify-theme-core-concepts.md`、`data-model.md` 等）。
+     - 或在既有文档中追加章节，确保对当前及未来变更具有指导与约束意义。
+
+4. **将分析结果反馈到变更提案**
+   - 在对应的 `openspec/changes/[change-id]/` 下：
+     - 补充或校正 `proposal.md` 中的「Why / Impact / 不在本次范围 / 风险与依赖」等与工程结构有关的内容。
+     - 在 `design.md` 中记录本次需求对架构层、模块边界、数据流、安全/合规、性能等方面的具体设计决策；**结构与自检**须符合 REFERENCE《技术方案与架构产出物-最小结构与自检》中 design.md 最小结构与自检清单。
+     - **执行模型评估**：针对 PRD 中识别出的长时间运行或复杂流程需求，在 `design.md` 中评估并明确执行模型（见 REFERENCE/执行模型评估指南.md）：
+       - 是一次性「大事务」执行，还是「阶段化」执行？
+       - 是否需要 checkpoint + resume 机制？
+       - 可观测性如何设计？进度如何反馈？
+       - 参考 `memory/patterns/pattern-observable-small-steps` 阶段化执行模式
+       - 参考 `memory/patterns/pattern-problem-analysis-3-layer` 三层穿透分析法
+     - 如有必要，在相关 `specs/[capability]/spec.md` 中，以 `ADDED` / `MODIFIED` / `REMOVED` Requirements + Scenario 的形式，对工程结构约束进行结构化描述。
+   - 若产出**技术架构图、执行逻辑图、数据流图**等，存放于 `docs/project-prd-changes/[change-id]/architecture/` 或 `project-rules/`，并在 design.md 或 project-rules 对应章节中引用；约定见 REFERENCE 同文档。
+
+5. **与用户及其他技能协同**
+   - 当判断「是否构成重大结构变化」「change-id 如何选择或创建」「设计取舍」等关键问题需要业务/产品决策时：
+     - 应**主动提问**，遵循 `AGENTS.md` 中「有待决议项或其他疑问时 AI 主动发问」的约定。
+   - 结合 `request-analysis` 的任务拆分结果，将新增的工程结构相关工作项补充进对应 `tasks.md`，并保持可勾选。
+
+---
+
+## 三、输出要求与文件约定
+
+本技能的输出应遵循 OpenSpec 规范，与以下文件结构对齐：
+
+- **1. 项目宪法规范：`openspec/project.md`**
+  - 典型章节（可按项目需要增减）：
+    - 项目名称与定位
+    - 开发环境与运行环境
+    - 架构模式（层次划分、边界与职责）
+    - 技术栈选型（前端/后端/平台/第三方服务）
+    - 目录结构与职责划分
+    - 命名与格式约定（如与 `project-rules/` 的对齐方式）
+    - 与仓库中其他文档与代码的关系
+  - 语气上应明确其为「**最高效力宪法规范**」：实现与评审必须遵守，补充细则由 `project-rules/` 给出。
+
+- **2. 工程补充约束：`project-rules/`**
+  - 结构可依据项目情况，但建议覆盖：
+    - 核心名词与概念解释（Glossary）
+    - 产品与模块架构模型（Architecture）
+    - 数据概念模型与关键对象描述（Data Model）
+    - 全链路关键场景的信息流/数据流（Flows）
+    - 开发与实现约束（例如：安全、性能、监控、可观测性、可扩展性等）
+  - 在文内明确指出与 `openspec/project.md` 的从属关系：本目录为其「补充约束层」，用于细化与落地顶层约定。
+
+- **3. 变更级文档：`openspec/changes/[change-id]/`**
+  - `proposal.md`：说明本次变更在工程结构上的动机与影响范围。
+  - `design.md`：给出与实现紧密相关的架构与技术设计细节；**最小结构**（变更目标与范围、架构与模块、接口与数据、关键流程与执行逻辑、异常/安全/性能、与需求/PRD 对应）与**自检**见 REFERENCE《技术方案与架构产出物-最小结构与自检》。
+  - `specs/[capability]/spec.md`：使用 OpenSpec 形式记录与工程结构、约束相关的 Requirements + Scenarios。
+- **4. 架构图等设计产出物**
+  - 技术架构图、执行逻辑图、数据流图、序列图等：建议存放于 `docs/project-prd-changes/[change-id]/architecture/` 或 `project-rules/`；在 design.md、project-rules 对应章节中引用。类型、存放与引用约定见 REFERENCE 同文档。
+
+---
+
+## 四、与其他技能的协同方式
+
+- **与 `request-analysis` 的关系**
+  - `request-analysis` 侧重于：从需求角度拆解功能、场景与任务，并按照 OpenSpec 结构输出变更提案与规范增量。
+  - `project-analysis` 侧重于：从工程与架构角度梳理项目宪法规范与工程补充约束，确保所有变更与既定架构/技术栈/目录结构保持一致或在更新后被完整记录。
+  - 建议流程：
+    1. 先由 `request-analysis` 完成需求分析与初始变更结构。
+    2. 随后调用 `project-analysis` 对工程结构进行审视与更新。
+    3. 最后回写到 `openspec/project.md`、`project-rules/` 与 `openspec/changes/[change-id]/`。
+
+- **与 `image-analysis` 的关系（可选）**
+  - 若用户提供架构图、部署图、数据流图等图片，可由 `image-analysis` 解析结构与要素，再由本技能将解析结果抽象成：
+    - 架构层描述（写入 `project.md` 或 `project-rules/`）。
+    - 关键信息流/数据流（写入 `project-rules/`）。
+    - 与场景相关的结构性约束（写入对应的 `specs/*/spec.md`）。
+
+---
+
+## 五、执行时的注意事项
+
+- **优先遵循 OpenSpec 规范与项目本地约定**
+  - 在任何结构性决策前，先查阅：
+    - 本仓库的 `openspec/project.md` 与 `project-rules/`。
+    - `AGENTS.md` 与 `OpenSpec.md` 中对本项目/所有项目适用的共性约定。
+  - 避免与既有约定冲突；如必须调整，应在 `project.md` / `project-rules/` 中同步更新并注明原因。
+
+- **区分「重大结构变化」与「局部实现变化」**
+  - 如仅为现有模块内部逻辑调整，一般无需修改 `project.md`，可在 `design.md` 或 `specs/*` 中说明。
+  - 涉及新层级、新服务、新部署单元或导致关键数据流重构的，应视为结构性变化，需更新宪法与补充约束。
+
+- **遇到不确定项要主动提问**
+  - 对以下问题不得自行假设，应主动询问用户：
+    - 当前项目的主技术栈、部署环境尚未在文档中明确。
+    - 新需求是否允许引入额外平台/框架/服务。
+    - 对性能、安全、合规等的明确目标与优先级。
+
+- **保持输出可维护、可扩展**
+  - 文档结构应便于未来迭代，不在单一文件堆叠过多无结构内容。
+  - 推荐在 `project-rules/` 下按主题划分文件，并在开头给出简要导航。
+
+---
+
+## 六、示例使用流程（以 Shopify 主题项目为例）
+
+1. 用户输入：「分析工程结构，看看本次健康食品主题 MVP 需求是否需要调整架构或 project-rules」。
+2. AI：
+   1. 加载 `request-analysis` 输出（阅读 `docs/project-prd-changes/[change-id]/` 与 `openspec/changes/[change-id]/`）。
+   2. 检查 `openspec/project.md` 是否已经清晰描述了项目定位、开发环境、架构模式（如基于 Skeleton 的 Shopify 主题）、技术栈、目录结构与命名格式等：
+      - 若已覆盖且本次需求只是在既有模式内扩展 Section 与模板，则记录「无需更新架构宪法」。
+      - 若发现缺失或不一致（例如新引入多语言策略、额外数据源等），则补充或修订对应章节。
+   3. 检查 `project-rules/` 中是否已有 Shopify 主题核心概念、数据模型、信息流与实现约束：
+      - 如缺失，则生成或初始化相关文档。
+      - 如已有，但需适配健康食品垂类的特殊约束（如合规标识、营养信息展示等），则进行补充说明。
+   4. 在 `openspec/changes/add-mvp-health-food-theme/design.md` 中，落地与本次变更直接相关的结构与实现决策。
+   5. 如发现重大架构影响或存在多种可选方案，向用户发问并在 `proposal.md` 中记录取舍理由。
+
+通过以上流程，本技能帮助项目在**需求变更**的同时，保持工程结构文档与架构约定的**持续一致性与可追溯性**。
+

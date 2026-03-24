@@ -1,0 +1,14 @@
+# Hybrid 质量门禁 Python 依赖
+
+# 核心依赖
+pyyaml>=6.0
+
+# 代码检查
+pytest>=7.0
+pytest-cov>=4.0
+bandit>=1.7
+flake8>=6.0
+
+# LLM 接口（按需安装）
+openai>=1.0
+anthropic>=0.18

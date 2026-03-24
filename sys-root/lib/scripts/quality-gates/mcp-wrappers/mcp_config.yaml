@@ -1,0 +1,15 @@
+# MCP 质量门禁配置
+# MCP Server 会根据当前工作目录自动发现 change-id
+
+quality_gates:
+  prd:
+    config: "/Users/billhu/agentsystem/sys-root/lib/scripts/quality-gates/config.yaml"
+
+  solution:
+    config: "/Users/billhu/agentsystem/sys-root/lib/scripts/quality-gates/config.yaml"
+
+  code:
+    config: "/Users/billhu/agentsystem/sys-root/lib/scripts/quality-gates/config.yaml"
+
+  delivery:
+    config: "/Users/billhu/agentsystem/sys-root/lib/scripts/quality-gates/config.yaml"

@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "description": "agentsystem 用户层配置：产品独立开发者的偏好与 Cursor 侧阅读顺序提示。",
+    "version": "1.3",
+    "audience": "independent_product_developer"
+  },
+  "profile": {
+    "role": "independent_product_developer",
+    "role_label_zh": "产品独立开发者",
+    "working_style": [
+      "需求—方案—实现—测试闭环，偏好可追溯变更（openspec / change-id）",
+      "agentsystem 作治理壳，业务代码在各 project 仓库；通过 workspace 软链挂载 claw-config"
+    ]
+  },
+  "preferences": {
+    "language": "zh-CN",
+    "agent": {
+      "verbosity": "concise",
+      "prefer_structured_output": true,
+      "prefer_markdown_headings": true
+    },
+    "development": {
+      "prefer_git_friendly_artifacts": true,
+      "prefer_env_for_secrets": true
+    }
+  },
+  "cursor": {
+    "host": "cursor",
+    "agent": {
+      "read_order_notes": [
+        ".cursor/rules/*.mdc 由 Cursor 按工作区自动加载，属入口壳；不在下列「主动阅读」顺序中重复列出。",
+        "sys-root/（尤其 sys-root/lib/）为底层全量库：默认禁止通读；仅按 claw-config/AGENTS.md、openspec 或当前任务显式引用，定点打开对应 skill / memory / script 文件。"
+      ],
+      "read_order_hint": [
+        "① 业务运行时：workspace/{project}/claw-config/AGENTS.md（及同目录内 SOUL/MEMORY/SKILLS/TOOLS 等按需）",
+        "② 治理层（业务仓库，按需）：openspec/AGENTS.md 及与当前 change-id 相关的 openspec 文档",
+        "③ 按需下沉：据 ①② 中的引用与任务类型，定点读取业务仓 project-rules，以及 sys-root/lib 下指定条目（skills / memory / scripts 等），勿全库浏览",
+        "④ 用户层（agentsystem，里程碑适用）：新建业务项目 → usr-devclaw/usr-rules/PROJECT-CONFIG.md；该项目下新开 change-id 迭代 → usr-devclaw/usr-rules/OpenSpec.md。非每轮必经；列于第 ④ 步表示在立项/开迭代等时机再补读"
+      ],
+      "read_order_note_ordering": "顺序编号为 ①②③④。日常主线为 ①→②→③；④ 为时间触发（新建项目 / 新 change-id），不插入日常每轮阅读，故放在最后一步。"
+    }
+  }
+}

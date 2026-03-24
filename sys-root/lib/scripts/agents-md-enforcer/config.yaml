@@ -1,0 +1,32 @@
+# AGENTS.md 强制检查器配置
+
+# 基础路径配置
+base_path: "/Users/billhu/agentsystem/workspace"
+
+# 强制检查规则
+enforcement:
+  # 是否强制要求 AGENTS.md 存在
+  require_agents_md: true
+  
+  # 是否强制要求非空内容
+  require_non_empty: true
+  
+  # 是否强制要求 role 字段
+  require_role: true
+  
+  # 最小职责数量
+  min_responsibilities: 1
+
+# 错误提示信息
+messages:
+  project_not_found: "Project '{project}' 不存在"
+  agents_md_not_found: "必须读取 AGENTS.md 才能执行任务"
+  agents_md_empty: "AGENTS.md 内容为空"
+  role_not_found: "AGENTS.md 缺少 role 字段"
+  parse_error: "AGENTS.md 解析失败"
+
+# 修复建议
+remediations:
+  create_agents_md: "请创建 {path} 文件，定义 Agent 角色和职责"
+  check_format: "请检查 AGENTS.md 格式是否正确（YAML frontmatter + Markdown）"
+  verify_project: "请确认 project 名称正确，或创建目录：{path}"

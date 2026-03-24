@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "description": "本文件为 `sys-root/lib/memory/` 下各类 **Markdown 记忆条目** 的**全局索引**（manifest），用于按维度检索与工具消费；单条记忆的正文仍以各子目录中的 `.md` 为准，本文件不重复全文。",
+    "version": "1.0",
+    "root_path": "sys-root/lib/memory",
+    "related_docs": ["README.md", "schema.md"]
+  },
+  "index_dimensions": {
+    "memory_type": {
+      "description": "记忆类型维度：与单文件 frontmatter 中的 `type` 及目录分类一致。",
+      "allowed_values": [
+        "pattern",
+        "anti-pattern",
+        "preference",
+        "playbook",
+        "reflection"
+      ],
+      "directory_mapping": {
+        "pattern": "patterns/",
+        "anti-pattern": "anti-patterns/",
+        "preference": "preferences/",
+        "playbook": "playbooks/",
+        "reflection": "reflections/"
+      }
+    },
+    "applicable_scope": {
+      "description": "适用场景维度：该记忆主要服务于哪一类上下文（世界通识 / 本仓 agentsystem / 某一业务 project）。与 `schema.md` 中 `applicable_projects` 可对照使用；此处用规范化枚举便于索引。",
+      "allowed_values": [
+        "world_general",
+        "agentsystem",
+        "business_project"
+      ],
+      "value_labels": {
+        "world_general": "世界通识（与具体仓库无关的通用原则、跨栈常识）",
+        "agentsystem": "本仓 agentsystem（治理壳、门禁、workspace、脚本与配置）",
+        "business_project": "某一业务 project（如 curiobuddy；需在条目中给出 project 标识）"
+      },
+      "notes": "当 applicable_scope 为 business_project 时，索引条目或对应 md 的 frontmatter 应包含具体项目名/slug（如 `curiobuddy`）。"
+    }
+  },
+  "entries": []
+}

@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "description": "本文件为 `sys-root/lib/skills/` 下各 **技能包** 的**全局索引（manifest）**：登记技能 id、目录路径与元数据，便于检索与自动化加载；单技能的完整步骤与规范仍以各子目录中的 `SKILL.md` 及 `REFERENCE/` 为准，本文件不重复正文。",
+    "version": "1.0",
+    "root_path": "sys-root/lib/skills",
+    "convention": "每个技能为独立子目录，入口文档一般为 `SKILL.md`。"
+  },
+  "entries": []
+}
