@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 PRD 质量门禁检查脚本
+对应 OpenSpec Step 2：PRD评审（Gate 1）
 Hybrid 模式：Python 形式检查 + LLM 语义增强
 
-使用方法：
-    python check_prd.py <prd_file_path>
-    python check_prd.py <prd_file_path> --config config.yaml
-    python check_prd.py <prd_file_path> --llm  # 启用 LLM 增强
+使用说明：
+    Step 2 执行命令：python check_prd.py <prd_file> --llm
+    Step 2 完成后命令：python check_prd.py <prd_file> --agent-score <分数>
 """
 
 import argparse
@@ -37,6 +37,7 @@ class GateResult:
     passed: bool
     checks: list[CheckResult] = field(default_factory=list)
     llm_analysis: Optional[str] = None
+    llm_score: Optional[float] = None
 
 
 class PRDChecker:
@@ -175,12 +176,27 @@ class PRDChecker:
         )
 
         if enable_llm:
-            result.llm_analysis = self._llm_analysis(content)
+            result.llm_analysis, result.llm_score = self._llm_analysis(content, file_path)
+            python_weight = 0.4
+            llm_weight = 0.6
+            result.total_score = result.total_score * python_weight + result.llm_score * llm_weight
+            result.passed = result.total_score >= threshold
 
         return result
 
-    def _llm_analysis(self, content: str) -> str:
-        return "[LLM 增强待集成]\n产品逻辑完整性和设计合理性评估需要 LLM 接口"
+    def _llm_analysis(self, content: str, file_path: str = "") -> tuple:
+        try:
+            from llm_enhancer import LLMEnhancer
+            enhancer = LLMEnhancer()
+            result = enhancer.analyze_prd(content, file_path)
+            score = result.get("score", 80)
+            if result.get("source") == "api" and result.get("analysis"):
+                return result["analysis"], score
+            if result.get("source") == "agent" and result.get("analysis"):
+                return result["analysis"], score
+            return f"[{result.get('source', 'unknown').upper()}] {result.get('analysis', 'LLM 增强执行中')}", score
+        except Exception as e:
+            return f"[LLM 增强执行中] {str(e)}", 80
 
 
 def print_result(result: GateResult, verbose: bool = True):
@@ -203,7 +219,23 @@ def print_result(result: GateResult, verbose: bool = True):
                     print(f"      {line}")
 
     if result.llm_analysis:
-        print(f"\n🤖 LLM 分析:\n{result.llm_analysis}")
+        is_prompt = result.llm_analysis.startswith("请以")
+        if is_prompt:
+            print(f"\n🤖 LLM 语义增强:")
+            print(f"   来源: Agent (需要用户触发)")
+            print(f"   当前评分: {result.llm_score:.1f}/100 (权重60%) [待语义评审后更新]")
+            print(f"\n{'='*60}")
+            print(f"📋 请复制以下 Prompt 发送给会话 Agent 执行语义评审:")
+            print(f"{'='*60}")
+            print(result.llm_analysis)
+            print(f"{'='*60}")
+            print(f"\n💡 Agent 评审完成后，请将结果回填以更新综合评分")
+        else:
+            print(f"\n🤖 LLM 语义增强:")
+            print(f"   来源: API")
+            if result.llm_score is not None:
+                print(f"   评分: {result.llm_score:.1f}/100 (权重60%)")
+            print(f"   详情:\n{result.llm_analysis}")
 
     print(f"{'='*60}\n")
 
@@ -215,6 +247,7 @@ def main():
     parser.add_argument("prd_file", help="PRD 文件路径")
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
     parser.add_argument("--llm", action="store_true", help="启用 LLM 增强")
+    parser.add_argument("--agent-score", type=float, help="回填 Agent 语义评审的实际分数（0-100）")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
     parser.add_argument("-v", "--verbose", action="store_true", default=True)
 
@@ -223,6 +256,20 @@ def main():
     try:
         checker = PRDChecker(args.config)
         result = checker.check_prd_file(args.prd_file, args.llm)
+
+        if args.agent_score is not None:
+            python_weight = 0.4
+            llm_weight = 0.6
+            result.llm_score = args.agent_score
+            python_score = sum(c.score for c in result.checks)
+            result.total_score = python_score * python_weight + args.agent_score * llm_weight
+            result.passed = result.total_score >= result.threshold
+            print(f"\n✅ 分数已更新:")
+            print(f"   Python 自动化分数: {python_score:.1f} × {python_weight} = {python_score * python_weight:.1f}")
+            print(f"   Agent 语义评审分数: {args.agent_score:.1f} × {llm_weight} = {args.agent_score * llm_weight:.1f}")
+            print(f"   综合评分: {result.total_score:.1f}/100")
+            print(f"   状态: {'✅ 通过' if result.passed else '❌ 未通过'}")
+            sys.exit(0 if result.passed else 1)
 
         if args.json:
             output = {

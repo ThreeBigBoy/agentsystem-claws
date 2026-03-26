@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
 交付质量门禁检查脚本
+对应 OpenSpec Step 8：归档/交付（Gate 4）
 Hybrid 模式：Python 自动化检查 + 人工确认
 
-使用方法：
-    python check_delivery.py <change_id> --project <project_dir>
+使用说明：
+    Step 8 执行命令：python check_delivery.py <change_id> --project <project_dir>
+    Step 8 人工确认：python check_delivery.py <change_id> --project <project_dir> --confirm
 """
 
 import argparse

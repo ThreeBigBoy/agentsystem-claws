@@ -21,8 +21,19 @@ from typing import Optional
 from model_selector import ModelSelector
 
 
+def _load_env(env_path: str = "/Users/billhu/agentsystem/sys-root/config/.env"):
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ[key.strip()] = value.strip()
+
+
 class LLMEnhancer:
     def __init__(self):
+        _load_env()
         self.model_selector = ModelSelector()
         self._setup_client()
 
@@ -49,12 +60,19 @@ class LLMEnhancer:
             print("错误: 请安装 openai 包: pip install openai")
             self.client = None
 
-    def _call_api(self, model_id: str, prompt: str) -> Optional[dict]:
-        if not self.client:
+    def _call_api(self, model_id: str, prompt: str, task: str = "prd_review") -> Optional[dict]:
+        model_config = self.model_selector.resolve_model_for_task(task)
+        api_key = model_config.get("api_key")
+        base_url = model_config.get("base_url")
+
+        if not api_key:
+            print(f"API Key 未配置 for {task}")
             return None
 
         try:
-            response = self.client.chat.completions.create(
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key, base_url=base_url)
+            response = client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
@@ -68,13 +86,13 @@ class LLMEnhancer:
             print(f"API 调用失败: {str(e)}，将启用 Agent 兜底")
             return None
 
-    def _agent_fallback(self, task: str, content: str, python_result: dict = None) -> dict:
+    def _agent_fallback(self, task: str, content: str, python_result: dict = None, file_path: str = "") -> dict:
         print(f"🔄 Agent 直接执行评审...")
 
         prompts = {
-            "prd_review": self._get_prd_review_prompt(content),
-            "solution_review": self._get_solution_review_prompt(content),
-            "code_review": self._get_code_review_prompt(content)
+            "prd_review": self._get_prd_review_prompt(content, file_path),
+            "solution_review": self._get_solution_review_prompt(content, file_path),
+            "code_review": self._get_code_review_prompt(content, file_path)
         }
 
         analysis = prompts.get(task, f"请评审以下内容：\n\n{content[:2000]}")
@@ -92,7 +110,38 @@ class LLMEnhancer:
             "note": "由当前会话 Agent 直接完成评审"
         }
 
-    def _get_prd_review_prompt(self, content: str) -> str:
+    def _get_prd_review_prompt(self, content: str = "", file_path: str = "") -> str:
+        if file_path:
+            cmd_hint = f"""
+---
+## 📋 评审完成后
+
+请执行以下命令回填分数：
+
+```bash
+python check_prd.py "{file_path}" --agent-score <你给出的总分>
+```
+
+例如：若你评分为85分，则执行：
+```bash
+python check_prd.py "{file_path}" --agent-score 85
+```
+"""
+            prd_ref = f"""
+## PRD 文档路径
+
+请读取以下 PRD 文档进行评审：
+
+**文件路径**：`{file_path}`
+"""
+        else:
+            cmd_hint = ""
+            prd_ref = f"""
+## PRD 内容
+---
+{content}
+---"""
+
         return f"""请以资深产品经理身份评审以下 PRD 文档。
 
 评审维度：
@@ -103,14 +152,41 @@ class LLMEnhancer:
 - 总分（100分制）
 - 优点
 - 问题与建议
+{cmd_hint}
+{prd_ref}"""
 
-## PRD 内容
+    def _get_solution_review_prompt(self, content: str = "", file_path: str = "") -> str:
+        if file_path:
+            cmd_hint = f"""
+---
+## 📋 评审完成后
+
+请执行以下命令回填分数：
+
+```bash
+python check_solution.py "{file_path}" --agent-score <你给出的总分>
+```
+
+例如：若你评分为80分，则执行：
+```bash
+python check_solution.py "{file_path}" --agent-score 80
+```
+"""
+            content_ref = f"""
+## 技术方案文件路径
+
+请读取以下技术方案进行评审：
+
+**文件路径**：`{file_path}`
+"""
+        else:
+            cmd_hint = ""
+            content_ref = f"""
+## 技术方案内容
 ---
 {content}
 ---
 """
-
-    def _get_solution_review_prompt(self, content: str) -> str:
         return f"""请以资深架构师身份评审以下技术方案。
 
 评审维度：
@@ -122,14 +198,41 @@ class LLMEnhancer:
 - 总分（100分制）
 - 技术风险分析
 - 建议
+{cmd_hint}
+{content_ref}"""
 
-## 技术方案内容
+    def _get_code_review_prompt(self, content: str = "", file_path: str = "") -> str:
+        if file_path:
+            cmd_hint = f"""
+---
+## 📋 评审完成后
+
+请执行以下命令回填分数：
+
+```bash
+python check_code.py "{file_path}" --agent-score <你给出的总分>
+```
+
+例如：若你评分为85分，则执行：
+```bash
+python check_code.py "{file_path}" --agent-score 85
+```
+"""
+            content_ref = f"""
+## 代码目录路径
+
+请读取以下代码目录进行评审：
+
+**目录路径**：`{file_path}`
+"""
+        else:
+            cmd_hint = ""
+            content_ref = f"""
+## 代码内容
 ---
 {content}
 ---
 """
-
-    def _get_code_review_prompt(self, content: str) -> str:
         return f"""请评审以下代码的逻辑合理性。
 
 评审维度：
@@ -141,12 +244,8 @@ class LLMEnhancer:
 - 总分（100分制）
 - 问题列表
 - 优化建议
-
-## 代码内容
----
-{content}
----
-"""
+{cmd_hint}
+{content_ref}"""
 
     def _should_use_api(self, user_input: str = "") -> bool:
         if "请使用API模型" in user_input or "用API模型" in user_input or "使用API模型" in user_input:
@@ -198,13 +297,13 @@ class LLMEnhancer:
             }
 
         if not self._should_use_api(user_input):
-            return self._agent_fallback("prd_review", content, python_result)
+            return self._agent_fallback("prd_review", content, python_result, file_path)
 
         model_config = self.model_selector.resolve_model_for_task("prd_review")
         model_id = model_config.get("model_name_in_api", model_config.get("model_id"))
         prompt = self._get_prd_review_prompt(content)
 
-        api_result = self._call_api(model_id, prompt)
+        api_result = self._call_api(model_id, prompt, "prd_review")
         if api_result:
             result = self._parse_analysis(api_result, model_config, python_result)
             result["python_check"] = python_result
@@ -225,7 +324,7 @@ class LLMEnhancer:
             }
 
         if not self._should_use_api(user_input):
-            return self._agent_fallback("solution_review", content, python_result)
+            return self._agent_fallback("solution_review", content, python_result, file_path)
 
         model_config = self.model_selector.resolve_model_for_task("solution_review")
         model_id = model_config.get("model_name_in_api", model_config.get("model_id"))
@@ -234,9 +333,9 @@ class LLMEnhancer:
         if prd_content:
             full_content = f"## PRD 内容\n{prd_content[:1500]}\n\n## 技术方案\n{content}"
 
-        prompt = self._get_solution_review_prompt(full_content)
+        prompt = self._get_solution_review_prompt(full_content, file_path)
 
-        api_result = self._call_api(model_id, prompt)
+        api_result = self._call_api(model_id, prompt, "solution_review")
         if api_result:
             result = self._parse_analysis(api_result, model_config, python_result)
             result["python_check"] = python_result
@@ -257,19 +356,19 @@ class LLMEnhancer:
             }
 
         if not self._should_use_api(user_input):
-            return self._agent_fallback("code_review", code_content, python_result)
+            return self._agent_fallback("code_review", code_content, python_result, file_path)
 
         model_config = self.model_selector.resolve_model_for_task("code_review")
         model_id = model_config.get("model_name_in_api", model_config.get("model_id"))
         prompt = self._get_code_review_prompt(code_content)
 
-        api_result = self._call_api(model_id, prompt)
+        api_result = self._call_api(model_id, prompt, "code_review")
         if api_result:
             result = self._parse_analysis(api_result, model_config, python_result)
             result["python_check"] = python_result
             return result
 
-        return self._agent_fallback("code_review", code_content, python_result)
+        return self._agent_fallback("code_review", code_content, python_result, file_path)
 
     def _parse_analysis(self, api_result: dict, model_config: dict, python_result: dict = None) -> dict:
         analysis = api_result.get("analysis", "")
