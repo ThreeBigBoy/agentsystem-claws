@@ -160,7 +160,7 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 
 ---
 
-## 六、Skill/Memory 调度
+## 六、Skill/Memory 调度（强制执行顺序）
 
 进入每步前，确保加载正确的 Skill：
 
@@ -177,9 +177,72 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 | Step 9 | 无独立 Skill，按 Memory 执行 |
 | Step 10 | OpenSpec CLI 归档命令 |
 
+### 评审类阶段强制执行顺序
+
+**⚠️ 关键约束：评审类阶段必须严格遵循「先Agent评审后量化检查」的执行顺序**
+
+#### Step 2 PRD评审 - 强制执行顺序
+
+```
+1. 【强制】调用 prd-review Skill
+   ├─ 产出：评审纪要文件（records/PRD-[change-id]-评审纪要.md）
+   ├─ 判定：✓通过 / △有条件通过 / ✗不通过
+   └─ 阻塞项识别：标记阻塞性问题
+
+2. 【强制】调用 check_prd.py
+   ├─ 产出：量化评分 {score: XX}
+   └─ 评分结果影响综合判定
+
+3. 【强制校验】综合判定结论
+   ├─ ✓通过 → 可以进入Step 3
+   ├─ △有条件通过 → 必须修复 → 重新调用prd-review → 转为✓通过
+   └─ ✗不通过 → 必须修复 → 重新调用prd-review → 转为✓通过
+```
+
+#### Step 4 方案评审 - 强制执行顺序
+
+```
+1. 【强制】调用 architecture-review Skill
+   ├─ 产出：architecture-review评审纪要
+   ├─ 判定：✓通过 / △有条件通过 / ✗不通过
+   └─ 重点：产出物规范性、与PRD一致性
+
+2. 【强制】调用 technical-design-review Skill
+   ├─ 产出：technical-design-review评审纪要
+   ├─ 判定：✓通过 / △有条件通过 / ✗不通过
+   └─ 重点：系统实现质量（10维度生产就绪）
+
+3. 【强制】调用 check_solution.py
+   ├─ 产出：量化评分 {score: XX}
+   └─ 评分结果影响综合判定
+
+4. 【强制校验】双Skill判定结论必须都为✓通过
+   ├─ architecture-review ✓通过 + technical-design-review ✓通过 → 可以进入Step 5
+   ├─ 任一为△有条件通过 → 必须修复 → 重新评审
+   └─ 任一为✗不通过 → 必须修复 → 重新评审
+```
+
+#### Step 6 代码评审 - 强制执行顺序
+
+```
+1. 【强制】调用 code-review Skill
+   ├─ 产出：code-review评审纪要
+   ├─ 判定：✓通过 / △有条件通过 / ✗不通过
+   └─ 重点：代码质量、规范遵循、测试覆盖
+
+2. 【强制】调用 check_code.py
+   ├─ 产出：量化评分 {score: XX}
+   └─ 评分结果影响综合判定
+
+3. 【强制校验】综合判定结论
+   ├─ ✓通过 → 可以进入Step 7
+   ├─ △有条件通过 → 必须修复 → 重新调用code-review → 转为✓通过
+   └─ ✗不通过 → 必须修复 → 重新调用code-review → 转为✓通过
+```
+
 ---
 
-## 七、决策树
+## 七、决策树（已更新强制执行顺序）
 
 ```
 当前阶段 = Step N
@@ -190,19 +253,32 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 │   └─ pattern-review-fix-loop（如涉及评审）
 │   └─ preference-quality-gate-checklist
 │
+├─ 评审类阶段（Step 2/4/6）？
+│   ├─ 是 → 【强制】先调用Skill执行评审
+│   │   ├─ Step 2: 必须先调用 prd-review
+│   │   ├─ Step 4: 必须先调用 architecture-review + technical-design-review
+│   │   └─ Step 6: 必须先调用 code-review
+│   │
+│   │   【校验】检查评审纪要是否存在
+│   │   ├─ 评审纪要不存在 → ❌ 违规！必须重新执行Skill评审
+│   │   └─ 评审纪要存在 → 继续
+│   │
+│   │   【判定】根据Skill评审结论
+│   │   ├─ 「✓通过」→ 可推进下一阶段
+│   │   ├─ 「△有条件通过」→ 执行修复循环
+│   │   └─ 「✗不通过」→ 执行修复循环
+│   │
+│   │   【强制】调用Python脚本获取量化评分
+│   │   └─ 两者都强制执行
+│   │
+│   └─ 否 → 继续判断
+│
 ├─ 准入条件是否满足？
 │   ├─ 否 → 停留在当前阶段，执行当前阶段 Skill
 │   └─ 是 → 继续判断
 │
-├─ 是否到达停止线？
+├─ 是否到达停止线（Gate）？
 │   ├─ 是 → 停下，提示用户人工确认
-│   └─ 否 → 继续判断
-│
-├─ 评审类阶段？
-│   ├─ 是 → 检查评审结论
-│   │   ├─ 「通过」→ 可推进下一阶段
-│   │   ├─ 「有条件通过」→ 执行修复循环
-│   │   └─ 「不通过」→ 执行修复循环
 │   └─ 否 → 继续判断
 │
 ├─ 是否有下一阶段 Skill？
@@ -212,13 +288,18 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 └─ 是否同一上下文内可继续推进多步？
     ├─ 是 → 继续推进
     └─ 否 → 停下，等待下一轮用户指令
+
+【强制执行顺序校验点】
+├─ Step 2: 必须有 prd-review 评审纪要
+├─ Step 4: 必须有 architecture-review + technical-design-review 评审纪要
+└─ Step 6: 必须有 code-review 评审纪要
 ```
 
 ---
 
 ## 八、质量门禁执行方式
 
-### 调用链路（简化版）
+### 调用链路（完整版）
 
 ```
 Agent (dev-workflow-orchestration)
@@ -228,18 +309,40 @@ Agent (dev-workflow-orchestration)
     ├─→ 确认准入条件满足
     │
     ▼
-Agent 直接调用 Python 脚本:
-    python check_<gate>.py <参数> --config <config.yaml> --json
+【第一步：必须】Agent评审（调用对应Skill）
+    ├─ Step 2: prd-review Skill → 产出评审纪要
+    ├─ Step 4: architecture-review + technical-design-review Skill → 产出评审纪要
+    └─ Step 6: code-review Skill → 产出评审纪要
+    │
+    ▼
+【第二步：必须】量化评分（调用Python脚本）
+    ├─ check_prd.py（强制）
+    ├─ check_solution.py（强制）
+    └─ check_code.py（强制）
+    │
+    ▼
+【第三步：强制校验】综合判定结论
+    ├─ Skill评审结论为✓通过 + 量化评分达标 → 进入下一阶段
+    └─ Skill评审结论为△/✗ → 执行修复循环
 ```
+
+### ⚠️ 重要澄清
+
+| 误区 | 正确认知 |
+|------|---------|
+| 「调用check_xxx.py就是执行评审」 | ❌ check_xxx.py只是量化评分，不能替代Skill评审 |
+| 「只要Skill评审通过就行」 | ❌ 两者都必须执行，缺一不可 |
+| 「只要分数够了就算通过」 | ❌ 综合判定需要Skill评审结论+量化评分两者结合 |
+| 「跳过Skill评审直接用脚本」 | ❌ 这是严重违规，跳过了深度语义评审 |
 
 ### Gate 与 Step 对应关系
 
-| Step | 阶段 | 应调用的脚本 | 说明 |
-|------|------|-------------|------|
-| 2 | PRD评审 | `check_prd.py` | PRD 质量门禁 |
-| 4 | 方案评审 | `check_solution.py` | 方案质量门禁 |
-| 6 | 代码评审 | `check_code.py` | 代码质量门禁 |
-| 8 | 归档 | `check_delivery.py` | 交付质量门禁 |
+| Step | 阶段 | 应调用的Skill | Python脚本（强制） |
+|------|------|--------------|-------------------|
+| 2 | PRD评审 | `prd-review` | `check_prd.py` |
+| 4 | 方案评审 | `architecture-review` + `technical-design-review` | `check_solution.py` |
+| 6 | 代码评审 | `code-review` | `check_code.py` |
+| 8 | 归档 | 无独立Skill | `check_delivery.py` |
 
 ### 脚本路径
 
@@ -336,3 +439,21 @@ sys-root/lib/skills/dev-workflow-orchestration/references/quality-gates/
 4. **每次切换 Step 必须加载 Skill**：同一回合内从 Step A 切换到 Step B 时，必须先加载对应 Skill
 5. **通用检查项**：所有阶段执行前须检查 Skill 版本、术语定义、本阶段门禁清单
 6. **迭代日志必须记录**：每个阶段完成后须在 `docs/项目事件日志.md` 中留痕
+
+### ⚠️ 强制执行顺序约束（关键）
+
+**评审类阶段（Step 2/4/6）必须严格遵循「先Skill评审后量化检查」的执行顺序，两者都是强制的**：
+
+| 步骤 | 内容 | 作用 |
+|------|------|------|
+| **第一步** | 调用 Skill 执行 Agent 语义评审 | 深度判定（阻塞项、修改建议） |
+| **第二步** | 调用 check_xxx.py 量化评分 | 快速评分（量化指标） |
+
+**正确的执行顺序**：
+```
+Step 2: prd-review Skill → check_prd.py（两者都强制）
+Step 4: architecture-review + technical-design-review Skill → check_solution.py（两者都强制）
+Step 6: code-review Skill → check_code.py（两者都强制）
+```
+
+**校验点**：两步都执行完毕后，才能综合判定结论。
