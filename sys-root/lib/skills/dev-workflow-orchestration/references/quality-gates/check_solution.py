@@ -4,6 +4,10 @@
 对应 OpenSpec Step 4：方案评审（Gate 2）
 Hybrid 模式：Python 形式检查 + LLM 语义增强
 
+职责说明：
+- 第一层判断（是否使用LLM）由本脚本实现
+- 第二层判断（Agent评审orAPI评审）由 llm_enhancer.py 实现
+
 使用说明：
     Step 4 执行命令：python check_solution.py <solution_file> --prd <prd_file> --llm
     Step 4 完成后命令：python check_solution.py <solution_file> --agent-score <分数>
@@ -240,7 +244,7 @@ class SolutionChecker:
             details=details
         )
 
-    def check_solution_file(self, file_path: str, prd_path: Optional[str] = None, enable_llm: bool = False) -> GateResult:
+    def check_solution_file(self, file_path: str, prd_path: Optional[str] = None, enable_llm: bool = False, user_input: str = "") -> GateResult:
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"方案文件不存在: {file_path}")
@@ -270,30 +274,32 @@ class SolutionChecker:
         if not passed and strictness == "warning":
             warnings.append("方案质量未达标准，但设置为 warning 模式，可继续推进")
 
+        python_score_normalized = total_score / len(checks)
+
         result = GateResult(
             gate_name="方案质量门禁",
-            total_score=total_score,
+            total_score=python_score_normalized,
             threshold=threshold,
             strictness=strictness,
-            passed=passed,
+            passed=python_score_normalized >= threshold,
             checks=checks,
             warnings=warnings
         )
 
         if enable_llm:
-            result.llm_analysis, result.llm_score = self._llm_analysis(content, prd_content, file_path)
+            result.llm_analysis, result.llm_score = self._llm_analysis(content, prd_content, file_path, user_input)
             python_weight = 0.7
             llm_weight = 0.3
-            result.total_score = total_score * python_weight + result.llm_score * llm_weight
+            result.total_score = python_score_normalized * python_weight + result.llm_score * llm_weight
             result.passed = result.total_score >= threshold
 
         return result
 
-    def _llm_analysis(self, content: str, prd_content: Optional[str] = None, file_path: str = "") -> tuple:
+    def _llm_analysis(self, content: str, prd_content: Optional[str] = None, file_path: str = "", user_input: str = "") -> tuple:
         try:
             from llm_enhancer import LLMEnhancer
             enhancer = LLMEnhancer()
-            result = enhancer.analyze_solution(content, file_path, prd_content)
+            result = enhancer.analyze_solution(content, file_path, prd_content, user_input)
             score = result.get("score", 80)
             if result.get("source") == "api" and result.get("analysis"):
                 return result["analysis"], score
@@ -352,12 +358,20 @@ def print_result(result: GateResult, verbose: bool = True):
     return 0 if result.passed else 1
 
 
+def _should_skip_llm(user_input: str = "") -> bool:
+    """判断是否跳过LLM语义增强（第一层判断）"""
+    skip_keywords = ["不使用LLM", "不要LLM", "不需要LLM", "跳过LLM", "不需要语义", "只需要自动化", "只要自动化", "不用LLM", "不要语义"]
+    return any(kw in user_input for kw in skip_keywords)
+
+
 def main():
     parser = argparse.ArgumentParser(description="方案质量门禁检查")
     parser.add_argument("solution_file", help="方案文件路径")
     parser.add_argument("--prd", help="PRD 文件路径（用于对应性检查）")
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
-    parser.add_argument("--llm", action="store_true", help="启用 LLM 增强")
+    parser.add_argument("--llm", action="store_true", help="启用 LLM 语义增强（默认启用，除非命中 --skip-llm）")
+    parser.add_argument("--skip-llm", action="store_true", help="跳过 LLM 语义增强，仅执行 Python 自动化检查")
+    parser.add_argument("--user-input", dest="user_input", default="", help="用户原始指令（用于自动判断是否跳过LLM）")
     parser.add_argument("--agent-score", type=float, help="回填 Agent 语义评审的实际分数（0-100）")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
     parser.add_argument("-v", "--verbose", action="store_true", default=True)
@@ -366,7 +380,13 @@ def main():
 
     try:
         checker = SolutionChecker(args.config)
-        result = checker.check_solution_file(args.solution_file, args.prd, args.llm)
+
+        use_llm = not args.skip_llm and not _should_skip_llm(args.user_input)
+
+        if use_llm:
+            result = checker.check_solution_file(args.solution_file, args.prd, enable_llm=True, user_input=args.user_input)
+        else:
+            result = checker.check_solution_file(args.solution_file, args.prd, enable_llm=False)
 
         if args.agent_score is not None:
             python_weight = 0.7
@@ -388,6 +408,8 @@ def main():
                 "score": result.total_score,
                 "threshold": result.threshold,
                 "passed": result.passed,
+                "llm_analysis": result.llm_analysis,
+                "llm_score": result.llm_score,
                 "warnings": result.warnings,
                 "checks": [
                     {"item": c.item, "passed": c.passed, "score": c.score, "details": c.details}

@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
 LLM 语义分析模块
-为质量门禁提供 LLM 增强的语义检查能力
+为质量门禁提供 LLM 增强的语义检查能力（第二层判断）
+
+职责说明：
+- 本模块只负责「第二层判断」：当 check_*.py 判断需要使用 LLM 语义增强时，
+  由本模块决定使用「会话Agent评审」还是「调用API模型评审」
+- 第一层判断（是否使用LLM）由 check_*.py 实现
 
 使用方式：
     from llm_enhancer import LLMEnhancer
     enhancer = LLMEnhancer()
-    result = enhancer.analyze_prd(content)
+    result = enhancer.analyze_prd(content, file_path, user_input)
 
 兜底机制：
-    - 默认由当前会话 Agent 完成评审
     - 若用户输入信息显式命中关键词"请使用API模型"，则调用 API 模型
+    - 若用户输入信息未命中"请使用API模型"，则由当前会话 Agent 完成评审
     - 若 API 调用失败时，兜底由当前会话 Agent 完成评审
 """
 
@@ -248,6 +253,8 @@ python check_code.py "{file_path}" --agent-score 85
 {content_ref}"""
 
     def _should_use_api(self, user_input: str = "") -> bool:
+        if "不要用API模型" in user_input or "不用API模型" in user_input:
+            return False
         if "请使用API模型" in user_input or "用API模型" in user_input or "使用API模型" in user_input:
             if self.client:
                 return True
@@ -255,46 +262,41 @@ python check_code.py "{file_path}" --agent-score 85
             return False
         return False
 
-    def _should_skip_llm(self, user_input: str = "") -> bool:
-        """判断是否跳过LLM语义增强"""
-        skip_keywords = ["不使用LLM", "不要LLM", "不需要LLM", "跳过LLM", "不需要语义", "只需要自动化", "只要自动化", "不用LLM", "不要语义"]
-        return any(kw in user_input for kw in skip_keywords)
-
     def _run_python_check(self, gate_type: str, file_path: str, project_dir: str = ".") -> dict:
         import subprocess
         import json
         from pathlib import Path
 
+        if not file_path:
+            return {}
+
         script_dir = Path(__file__).parent
 
         if gate_type == "prd":
-            cmd = ["python", str(script_dir / "check_prd.py"), file_path, "--json"]
+            cmd = ["python", str(script_dir / "check_prd.py"), file_path, "--skip-llm", "--json"]
         elif gate_type == "solution":
-            cmd = ["python", str(script_dir / "check_solution.py"), file_path, "--json"]
+            cmd = ["python", str(script_dir / "check_solution.py"), file_path, "--skip-llm", "--json"]
         elif gate_type == "code":
-            cmd = ["python", str(script_dir / "check_code.py"), file_path, "--json"]
+            cmd = ["python", str(script_dir / "check_code.py"), file_path, "--skip-llm", "--json"]
         else:
             return {}
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=str(script_dir))
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.stdout:
-                return json.loads(result.stdout)
+                json_str = result.stdout.strip()
+                for i, line in enumerate(json_str.split('\n')):
+                    if line.strip().startswith('{'):
+                        json_part = '\n'.join(json_str.split('\n')[i:])
+                        return json.loads(json_part)
+        except json.JSONDecodeError as e:
+            print(f"Python自动化检查执行失败: JSON解析错误 - {e}")
         except Exception as e:
             print(f"Python自动化检查执行失败: {e}")
         return {}
 
     def analyze_prd(self, content: str, file_path: str = "", user_input: str = "") -> dict:
         python_result = self._run_python_check("prd", file_path)
-
-        if self._should_skip_llm(user_input):
-            return {
-                "analysis": "用户选择不使用LLM，仅执行Python自动化检查",
-                "score": python_result.get("score"),
-                "passed": python_result.get("passed"),
-                "source": "python_only",
-                "python_check": python_result
-            }
 
         if not self._should_use_api(user_input):
             return self._agent_fallback("prd_review", content, python_result, file_path)
@@ -313,15 +315,6 @@ python check_code.py "{file_path}" --agent-score 85
 
     def analyze_solution(self, content: str, file_path: str = "", prd_content: Optional[str] = None, user_input: str = "") -> dict:
         python_result = self._run_python_check("solution", file_path)
-
-        if self._should_skip_llm(user_input):
-            return {
-                "analysis": "用户选择不使用LLM，仅执行Python自动化检查",
-                "score": python_result.get("score"),
-                "passed": python_result.get("passed"),
-                "source": "python_only",
-                "python_check": python_result
-            }
 
         if not self._should_use_api(user_input):
             return self._agent_fallback("solution_review", content, python_result, file_path)
@@ -345,15 +338,6 @@ python check_code.py "{file_path}" --agent-score 85
 
     def analyze_code(self, code_content: str, file_path: str = "", user_input: str = "") -> dict:
         python_result = self._run_python_check("code", file_path)
-
-        if self._should_skip_llm(user_input):
-            return {
-                "analysis": "用户选择不使用LLM，仅执行Python自动化检查",
-                "score": python_result.get("score"),
-                "passed": python_result.get("passed"),
-                "source": "python_only",
-                "python_check": python_result
-            }
 
         if not self._should_use_api(user_input):
             return self._agent_fallback("code_review", code_content, python_result, file_path)

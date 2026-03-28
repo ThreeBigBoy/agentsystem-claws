@@ -191,6 +191,7 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 
 2. 【强制】调用 check_prd.py
    ├─ 产出：量化评分 {score: XX}
+   ├─ 说明：包含第一层判断（是否使用LLM），第二层判断由 llm_enhancer.py 实现
    └─ 评分结果影响综合判定
 
 3. 【强制校验】综合判定结论
@@ -214,6 +215,7 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 
 3. 【强制】调用 check_solution.py
    ├─ 产出：量化评分 {score: XX}
+   ├─ 说明：包含第一层判断（是否使用LLM），第二层判断由 llm_enhancer.py 实现
    └─ 评分结果影响综合判定
 
 4. 【强制校验】双Skill判定结论必须都为✓通过
@@ -232,6 +234,7 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 
 2. 【强制】调用 check_code.py
    ├─ 产出：量化评分 {score: XX}
+   ├─ 说明：包含第一层判断（是否使用LLM），第二层判断由 llm_enhancer.py 实现
    └─ 评分结果影响综合判定
 
 3. 【强制校验】综合判定结论
@@ -239,6 +242,46 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
    ├─ △有条件通过 → 必须修复 → 重新调用code-review → 转为✓通过
    └─ ✗不通过 → 必须修复 → 重新调用code-review → 转为✓通过
 ```
+
+---
+
+### Test-Fix-Loop（编码阶段测试修复循环）
+
+**⚠️ 重要补充：编码实现阶段必须包含测试验证**
+
+```
+Step 5: 编码实现
+    │
+    ├─ 编写代码
+    ├─ 编写/更新测试
+    │
+    ▼
+Test-Fix-Loop（测试修复循环）
+    │
+    ├─ 执行测试：pytest / npm test / 其他测试命令
+    │   │
+    │   ├─ 测试通过 → 继续下一步
+    │   │
+    │   └─ 测试失败 → 调用 bug-diagnosis Skill
+    │                   │
+    │                   ├─ 问题定位（调用链路、日志分析）
+    │                   ├─ 根因分析（5 Why、模式识别）
+    │                   ├─ 修复策略（最小改动、设计原则）
+    │                   └─ 验证修复（重新运行测试）
+    │
+    └─ 测试通过后 → 进入 Step 6 代码评审
+```
+
+**触发条件**：测试失败时必须调用 `bug-diagnosis` Skill
+
+**Skill 调用路径**：`sys-root/lib/skills/bug-diagnosis/SKILL.md`
+
+**与 Review-Fix-Loop 的区别**：
+
+| 环节 | 触发时机 | 目的 |
+|------|---------|------|
+| Test-Fix-Loop | 测试失败 | 修复代码中的 bug |
+| Review-Fix-Loop | 评审不通过 | 修复评审发现的问题（通常是设计/方案问题）|
 
 ---
 

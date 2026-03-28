@@ -4,30 +4,47 @@
 
 Hybrid 质量门禁（Python + LLM）是一套量化验证 PRD/方案/代码/交付质量的工具集。
 
+## 概念解释
+
+### 使用LLM
+
+**使用LLM**，是指需要做语义评审，评审形式包括：
+- **会话Agent评审**：由当前会话 Agent 直接执行评审
+- **调用个人API模型评审**：调用配置的 API 模型进行评审
+
+具体选哪一种遵循两层判断逻辑中的第二层判断。
+
+### Agent评审
+
+**Agent评审**，是指当前会话 Agent 执行评审，是「使用LLM」做语义增强评审的途径之一。
+
+---
+
 ## 核心执行逻辑
 
 ### 两层判断机制
 
-| 层级 | 判断条件 | 执行行为 |
-|------|----------|----------|
-| **第一层** | 命中"不使用LLM" | 仅执行 Python 自动化检查 |
-| **第一层** | 未命中"不使用LLM" | 先 Python 自动化检查，再 LLM 语义增强 |
-| **第二层** | 命中"请使用API模型" | 调用 API 模型，失败则 Agent 兜底 |
-| **第二层** | 未命中"请使用API模型" | 直接由当前会话 Agent 完成评审 |
+| 层级 | 判断条件 | 执行行为 | 实现位置 |
+|------|----------|----------|----------|
+| **第一层** | 命中"不使用LLM" | 仅执行 Python 自动化检查 | **check_*.py**（显式调用入口） |
+| **第一层** | 未命中"不使用LLM" | 先 Python 自动化检查，再 LLM 语义增强 | **check_*.py**（显式调用入口） |
+| **第二层** | 命中"请使用API模型" | 调用 API 模型，失败则 Agent 兜底 | **llm_enhancer.py** |
+| **第二层** | 未命中"请使用API模型" | 直接由当前会话 Agent 完成评审 | **llm_enhancer.py** |
 
 ### 执行流程
 
 ```
-analyze_*(content, file_path, user_input)
+check_*.py（第1层判断）
     │
-    ├─ 第一层: 不使用LLM?
+    ├─ 第一层: 不使用LLM?（由 check_*.py 判断）
     │       │
     │       ├─ 是 → 仅 Python 自动化检查 → 返回
     │       │
     │       └─ 否 → 执行 Python 自动化检查
     │                   │
     │                   ▼
-    │       第二层: 请使用API模型?
+    │       llm_enhancer.py（第2层判断）
+    │       第二层: 请使用API模型?（由 llm_enhancer.py 判断）
     │               │
     │               ├─ 是 → 调用 API 模型
     │               │       ├─ 成功 → 返回 API 结果 + Python 检查
@@ -251,3 +268,28 @@ quality-gates/
 |--------|------|
 | API 密钥 | `sys-root/config/.env` |
 | 模型配置 | `sys-root/config/models.json` |
+
+## 测试
+
+### 测试脚本
+
+两层判断机制的完整测试脚本位于：
+
+```
+sys-root/lib/scripts/test_quality_gates/
+├── README.md                    # 测试脚本说明文档
+└── test_quality_gates_full.py   # 完整测试（18项测试）
+```
+
+**执行测试**：
+```bash
+cd /Users/billhu/agentsystem
+python sys-root/lib/scripts/test_quality_gates/test_quality_gates_full.py
+```
+
+**测试内容**：
+- 第一层判断：验证 `--skip-llm` 和 `--llm` 的行为差异
+- 第二层判断：验证 agent / api / python_only 的分支逻辑
+- 集成验证：两层判断正确协作
+
+详见测试脚本目录的 [README.md](file:///Users/billhu/agentsystem/sys-root/lib/scripts/test_quality_gates/README.md) |

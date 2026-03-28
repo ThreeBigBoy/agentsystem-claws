@@ -4,6 +4,10 @@
 对应 OpenSpec Step 6：代码评审（Gate 3）
 Hybrid 模式：Python 自动化检查 + LLM 可选评审
 
+职责说明：
+- 第一层判断（是否使用LLM）由本脚本实现
+- 第二层判断（Agent评审orAPI评审）由 llm_enhancer.py 实现
+
 使用说明：
     Step 6 执行命令：python check_code.py <project_dir> --llm
     Step 6 完成后命令：python check_code.py <project_dir> --agent-score <分数>
@@ -195,7 +199,7 @@ class CodeChecker:
             details="覆盖率检测失败，跳过"
         )
 
-    def check_project(self, project_dir: str, enable_llm: bool = False) -> GateResult:
+    def check_project(self, project_dir: str, enable_llm: bool = False, user_input: str = "") -> GateResult:
         path = Path(project_dir)
         if not path.exists():
             raise FileNotFoundError(f"项目目录不存在: {project_dir}")
@@ -211,31 +215,31 @@ class CodeChecker:
 
         threshold = self.code_config.get("threshold", 80)
         strictness = self.code_config.get("strictness", "blocking")
-        passed = total_score >= threshold
+        python_score_normalized = total_score / len(checks)
 
         result = GateResult(
             gate_name="代码质量门禁",
-            total_score=total_score,
+            total_score=python_score_normalized,
             threshold=threshold,
             strictness=strictness,
-            passed=passed,
+            passed=python_score_normalized >= threshold,
             checks=checks
         )
 
         if enable_llm:
-            result.llm_analysis, result.llm_score = self._llm_analysis(project_dir)
+            result.llm_analysis, result.llm_score = self._llm_analysis(project_dir, user_input)
             python_weight = 0.95
             llm_weight = 0.05
-            result.total_score = total_score * python_weight + result.llm_score * llm_weight
+            result.total_score = python_score_normalized * python_weight + result.llm_score * llm_weight
             result.passed = result.total_score >= threshold
 
         return result
 
-    def _llm_analysis(self, project_dir: str) -> tuple:
+    def _llm_analysis(self, project_dir: str, user_input: str = "") -> tuple:
         try:
             from llm_enhancer import LLMEnhancer
             enhancer = LLMEnhancer()
-            result = enhancer.analyze_code(project_dir, project_dir)
+            result = enhancer.analyze_code(project_dir, project_dir, user_input)
             score = result.get("score", 80)
             if result.get("source") == "api" and result.get("analysis"):
                 return result["analysis"], score
@@ -289,11 +293,19 @@ def print_result(result: GateResult, verbose: bool = True):
     return 0 if result.passed else 1
 
 
+def _should_skip_llm(user_input: str = "") -> bool:
+    """判断是否跳过LLM语义增强（第一层判断）"""
+    skip_keywords = ["不使用LLM", "不要LLM", "不需要LLM", "跳过LLM", "不需要语义", "只需要自动化", "只要自动化", "不用LLM", "不要语义"]
+    return any(kw in user_input for kw in skip_keywords)
+
+
 def main():
     parser = argparse.ArgumentParser(description="代码质量门禁检查")
     parser.add_argument("project_dir", help="项目目录路径")
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
-    parser.add_argument("--llm", action="store_true", help="启用 LLM 增强")
+    parser.add_argument("--llm", action="store_true", help="启用 LLM 语义增强（默认启用，除非命中 --skip-llm）")
+    parser.add_argument("--skip-llm", action="store_true", help="跳过 LLM 语义增强，仅执行 Python 自动化检查")
+    parser.add_argument("--user-input", dest="user_input", default="", help="用户原始指令（用于自动判断是否跳过LLM）")
     parser.add_argument("--agent-score", type=float, help="回填 Agent 语义评审的实际分数（0-100）")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
     parser.add_argument("-v", "--verbose", action="store_true", default=True)
@@ -302,7 +314,13 @@ def main():
 
     try:
         checker = CodeChecker(args.config)
-        result = checker.check_project(args.project_dir, args.llm)
+
+        use_llm = not args.skip_llm and not _should_skip_llm(args.user_input)
+
+        if use_llm:
+            result = checker.check_project(args.project_dir, enable_llm=True, user_input=args.user_input)
+        else:
+            result = checker.check_project(args.project_dir, enable_llm=False)
 
         if args.agent_score is not None:
             python_weight = 0.95
@@ -324,6 +342,8 @@ def main():
                 "score": result.total_score,
                 "threshold": result.threshold,
                 "passed": result.passed,
+                "llm_analysis": result.llm_analysis,
+                "llm_score": result.llm_score,
                 "checks": [
                     {"item": c.item, "passed": c.passed, "score": c.score, "details": c.details}
                     for c in result.checks

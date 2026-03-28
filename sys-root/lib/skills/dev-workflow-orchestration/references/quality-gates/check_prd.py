@@ -4,6 +4,10 @@ PRD 质量门禁检查脚本
 对应 OpenSpec Step 2：PRD评审（Gate 1）
 Hybrid 模式：Python 形式检查 + LLM 语义增强
 
+职责说明：
+- 第一层判断（是否使用LLM）由本脚本实现
+- 第二层判断（Agent评审orAPI评审）由 llm_enhancer.py 实现
+
 使用说明：
     Step 2 执行命令：python check_prd.py <prd_file> --llm
     Step 2 完成后命令：python check_prd.py <prd_file> --agent-score <分数>
@@ -147,7 +151,7 @@ class PRDChecker:
             details=details
         )
 
-    def check_prd_file(self, file_path: str, enable_llm: bool = False) -> GateResult:
+    def check_prd_file(self, file_path: str, enable_llm: bool = False, user_input: str = "") -> GateResult:
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"PRD 文件不存在: {file_path}")
@@ -161,34 +165,34 @@ class PRDChecker:
         ]
 
         total_score = sum(c.score for c in checks)
+        python_score_normalized = total_score / len(checks)
 
         threshold = self.prd_config.get("threshold", 80)
         strictness = self.prd_config.get("strictness", "blocking")
-        passed = total_score >= threshold
 
         result = GateResult(
             gate_name="PRD 质量门禁",
-            total_score=total_score,
+            total_score=python_score_normalized,
             threshold=threshold,
             strictness=strictness,
-            passed=passed,
+            passed=python_score_normalized >= threshold,
             checks=checks
         )
 
         if enable_llm:
-            result.llm_analysis, result.llm_score = self._llm_analysis(content, file_path)
+            result.llm_analysis, result.llm_score = self._llm_analysis(content, file_path, user_input)
             python_weight = 0.4
             llm_weight = 0.6
-            result.total_score = result.total_score * python_weight + result.llm_score * llm_weight
+            result.total_score = python_score_normalized * python_weight + result.llm_score * llm_weight
             result.passed = result.total_score >= threshold
 
         return result
 
-    def _llm_analysis(self, content: str, file_path: str = "") -> tuple:
+    def _llm_analysis(self, content: str, file_path: str = "", user_input: str = "") -> tuple:
         try:
             from llm_enhancer import LLMEnhancer
             enhancer = LLMEnhancer()
-            result = enhancer.analyze_prd(content, file_path)
+            result = enhancer.analyze_prd(content, file_path, user_input)
             score = result.get("score", 80)
             if result.get("source") == "api" and result.get("analysis"):
                 return result["analysis"], score
@@ -242,11 +246,19 @@ def print_result(result: GateResult, verbose: bool = True):
     return 0 if result.passed else 1
 
 
+def _should_skip_llm(user_input: str = "") -> bool:
+    """判断是否跳过LLM语义增强（第一层判断）"""
+    skip_keywords = ["不使用LLM", "不要LLM", "不需要LLM", "跳过LLM", "不需要语义", "只需要自动化", "只要自动化", "不用LLM", "不要语义"]
+    return any(kw in user_input for kw in skip_keywords)
+
+
 def main():
     parser = argparse.ArgumentParser(description="PRD 质量门禁检查")
     parser.add_argument("prd_file", help="PRD 文件路径")
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
-    parser.add_argument("--llm", action="store_true", help="启用 LLM 增强")
+    parser.add_argument("--llm", action="store_true", help="启用 LLM 语义增强（默认启用，除非命中 --skip-llm）")
+    parser.add_argument("--skip-llm", action="store_true", help="跳过 LLM 语义增强，仅执行 Python 自动化检查")
+    parser.add_argument("--user-input", dest="user_input", default="", help="用户原始指令（用于自动判断是否跳过LLM）")
     parser.add_argument("--agent-score", type=float, help="回填 Agent 语义评审的实际分数（0-100）")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
     parser.add_argument("-v", "--verbose", action="store_true", default=True)
@@ -255,7 +267,13 @@ def main():
 
     try:
         checker = PRDChecker(args.config)
-        result = checker.check_prd_file(args.prd_file, args.llm)
+
+        use_llm = not args.skip_llm and not _should_skip_llm(args.user_input)
+
+        if use_llm:
+            result = checker.check_prd_file(args.prd_file, enable_llm=True, user_input=args.user_input)
+        else:
+            result = checker.check_prd_file(args.prd_file, enable_llm=False)
 
         if args.agent_score is not None:
             python_weight = 0.4
@@ -277,6 +295,8 @@ def main():
                 "score": result.total_score,
                 "threshold": result.threshold,
                 "passed": result.passed,
+                "llm_analysis": result.llm_analysis,
+                "llm_score": result.llm_score,
                 "checks": [
                     {
                         "item": c.item,
