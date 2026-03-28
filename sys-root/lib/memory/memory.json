@@ -38,5 +38,46 @@
       "notes": "当 applicable_scope 为 business_project 时，索引条目或对应 md 的 frontmatter 应包含具体项目名/slug（如 `curiobuddy`）。"
     }
   },
-  "entries": []
+  "entries": [
+    {
+      "id": "mem-quality-gate-scoring-mechanism-improvement-001",
+      "title": "质量门禁评分机制从机械计数到质量指标的改进",
+      "type": "reflection",
+      "tags": ["quality-gate", "scoring-mechanism", "first-principles", "technical-design"],
+      "applicable_scope": "agentsystem",
+      "source_change_ids": ["sys-infra-quality-gate-v1"],
+      "file_path": "reflections/reflection-quality-gate-scoring-from-counting-to-quality.md",
+      "summary": "技术方案评审时发现评分机制存在根本性问题：机械计数关键词不等于质量评估。从第一性原理出发，重新设计质量指标评分机制。"
+    },
+    {
+      "id": "mem-skill-first-principles-review-001",
+      "title": "技术方案Skill从关键词罗列到第一性原理的升级",
+      "type": "reflection",
+      "tags": ["skill-upgrade", "first-principles", "quality-gate", "architecture-review", "technical-design-review"],
+      "applicable_scope": "agentsystem",
+      "source_change_ids": ["sys-infra-quality-gate-v1"],
+      "file_path": "reflections/reflection-skill-first-principles-review-upgrade.md",
+      "summary": "发现architecture-review、technical-design-review等skill存在设计缺陷：关键词罗列式评审无法反映真实质量。升级skill设计，并修正dev-workflow-orchestration的Step 4调度表。"
+    },
+    {
+      "id": "mem-quality-gate-solution-review-dimension-expansion-001",
+      "title": "质量门禁技术方案评审从3维度到6维度的升级",
+      "type": "reflection",
+      "tags": ["quality-gate", "solution-review", "first-principles", "dimension-expansion"],
+      "applicable_scope": "agentsystem",
+      "source_change_ids": ["sys-infra-quality-gate-v1"],
+      "file_path": "reflections/reflection-quality-gate-solution-review-dimension-expansion.md",
+      "summary": "技术方案评审原有3维度不足，从第一性原理出发，新增数据流设计、存储设计、项目结构3个评审维度，形成完整的6维度评审体系。"
+    },
+    {
+      "id": "mem-prd-skill-first-principles-upgrade-001",
+      "title": "PRD相关Skill从关键词罗列到第一性原理的升级",
+      "type": "reflection",
+      "tags": ["skill-upgrade", "first-principles", "prd-review", "request-analysis"],
+      "applicable_scope": "agentsystem",
+      "source_change_ids": ["sys-infra-quality-gate-v1"],
+      "file_path": "reflections/reflection-prd-skill-first-principles-upgrade.md",
+      "summary": "发现prd-review、request-analysis等PRD相关skill存在设计缺陷：第一性原理维度未显式提炼。升级skill设计，添加第一性原理PRD产出/评审框架。"
+    }
+  ]
 }

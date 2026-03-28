@@ -5,5 +5,22 @@
     "root_path": "sys-root/lib/skills",
     "convention": "每个技能为独立子目录，入口文档一般为 `SKILL.md`。"
   },
-  "entries": []
+  "entries": [
+    {
+      "id": "visual-design",
+      "name": "视觉设计优化",
+      "directory": "visual-design",
+      "entry": "SKILL.md",
+      "description": "视觉设计优化技能；当用户请求任何视觉输出（演示文稿、仪表盘、HTML页面、报告、电子表格、PDF、数据可视化）时，自动激活设计优化模式",
+      "trigger_keywords": ["创建演示文稿", "创建仪表盘", "创建报告", "设计页面", "设计可视化", "HTML", "视觉形式展示"]
+    },
+    {
+      "id": "data-analysis",
+      "name": "数据分析",
+      "directory": "data-analysis",
+      "entry": "SKILL.md",
+      "description": "数据分析技能；当用户需要数据分析、生成报告或创建可视化图表时使用。支持Excel/CSV文件读取、多轮深度分析、异常值下钻、生成ECharts可视化看板",
+      "trigger_keywords": ["分析数据", "数据分析", "生成报告", "可视化图表", "数据看板", "Excel分析"]
+    }
+  ]
 }

@@ -169,7 +169,7 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 | Step 1 | `request-analysis` |
 | Step 2 | `prd-review` |
 | Step 3 | `project-analysis` |
-| Step 4 | `architecture-review` |
+| Step 4 | `architecture-review` + `technical-design-review`（双技能协同） |
 | Step 5 | `coding-implement` |
 | Step 6 | `code-review` |
 | Step 7 | `func-test` |

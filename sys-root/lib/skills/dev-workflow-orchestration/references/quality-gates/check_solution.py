@@ -57,13 +57,12 @@ class SolutionChecker:
     def check_prd_alignment(self, content: str, prd_content: Optional[str] = None) -> CheckResult:
         prd_features = []
         if prd_content:
-            feature_pattern = re.compile(r"F\d+[:：]\s*\S+")
+            feature_pattern = re.compile(r"F-\d+")
             prd_features = feature_pattern.findall(prd_content)
 
         matched_features = []
         for feature in prd_features:
-            feature_id = feature.split(":")[0] if ":" in feature else feature.split("：")[0]
-            if feature_id in content:
+            if feature in content:
                 matched_features.append(feature)
 
         score = (len(matched_features) / max(len(prd_features), 1)) * 100
@@ -116,22 +115,127 @@ class SolutionChecker:
         )
 
     def check_tech_stack(self, content: str) -> CheckResult:
-        tech_keywords = ["Python", "JavaScript", "TypeScript", "Java", "Go", "Rust",
-                        "React", "Vue", "Angular", "Node.js", "FastAPI", "Django",
-                        "Spring", "PostgreSQL", "MySQL", "MongoDB", "Redis"]
-        found_tech = [tech for tech in tech_keywords if tech in content]
+        quality_checks = {
+            "技术需求分析": ["需求分析", "具体需求", "优先级"],
+            "候选方案对比": ["方案", "对比", "候选", "方案A", "方案B", "方案C"],
+            "选型决策": ["决策", "选择", "依据", "加权", "评分"],
+            "风险应对": ["风险", "应对", "缓解", "措施", "等级"],
+            "技术栈清单": ["技术栈", "框架", "数据库", "存储", "API"]
+        }
 
-        score = min(len(found_tech) * 15, 100)
-        passed = len(found_tech) >= 2
+        scores = {}
+        total_score = 0
 
-        details = f"技术栈提及: {len(found_tech)} 个"
-        if found_tech:
-            details += f"\n找到: {', '.join(found_tech[:5])}"
+        for check_name, keywords in quality_checks.items():
+            found = any(kw in content for kw in keywords)
+            check_score = 20 if found else 0
+            scores[check_name] = check_score
+            total_score += check_score
+
+        passed = total_score >= 60
+
+        details = f"技术选型质量评分: {total_score}/100"
+        for check_name, score in scores.items():
+            status = "✅" if score > 0 else "❌"
+            details += f"\n  {status} {check_name}: {'通过' if score > 0 else '缺失'}"
 
         return CheckResult(
             item="技术选型合理",
             passed=passed,
-            score=score,
+            score=total_score,
+            max_score=100,
+            details=details
+        )
+
+    def check_data_flow_design(self, content: str) -> CheckResult:
+        quality_checks = {
+            "数据流描述": ["数据流", "流向", "流程"],
+            "模块间接口": ["接口", "调用", "交互"],
+            "输入输出定义": ["输入", "输出", "参数", "返回值"],
+        }
+
+        scores = {}
+        total_score = 0
+
+        for check_name, keywords in quality_checks.items():
+            found = any(kw in content for kw in keywords)
+            check_score = 20 if found else 0
+            scores[check_name] = check_score
+            total_score += check_score
+
+        passed = total_score >= 40
+
+        details = f"数据流设计评分: {total_score}/100"
+        for check_name, score in scores.items():
+            status = "✅" if score > 0 else "❌"
+            details += f"\n  {status} {check_name}: {'通过' if score > 0 else '缺失'}"
+
+        return CheckResult(
+            item="数据流设计",
+            passed=passed,
+            score=total_score,
+            max_score=100,
+            details=details
+        )
+
+    def check_storage_design(self, content: str) -> CheckResult:
+        quality_checks = {
+            "存储结构定义": ["存储", "数据结构", "storage"],
+            "容量控制策略": ["容量", "限制", "清理", "自动清理"],
+            "数据安全措施": ["安全", "加密", "隐私"],
+        }
+
+        scores = {}
+        total_score = 0
+
+        for check_name, keywords in quality_checks.items():
+            found = any(kw in content for kw in keywords)
+            check_score = 20 if found else 0
+            scores[check_name] = check_score
+            total_score += check_score
+
+        passed = total_score >= 40
+
+        details = f"存储设计评分: {total_score}/100"
+        for check_name, score in scores.items():
+            status = "✅" if score > 0 else "❌"
+            details += f"\n  {status} {check_name}: {'通过' if score > 0 else '缺失'}"
+
+        return CheckResult(
+            item="存储设计",
+            passed=passed,
+            score=total_score,
+            max_score=100,
+            details=details
+        )
+
+    def check_project_structure(self, content: str) -> CheckResult:
+        quality_checks = {
+            "目录结构": ["目录", "结构", "文件夹"],
+            "模块划分": ["模块", "pages", "components", "utils"],
+            "规范遵循": ["规范", "规则", "遵循"],
+        }
+
+        scores = {}
+        total_score = 0
+
+        for check_name, keywords in quality_checks.items():
+            found = any(kw in content for kw in keywords)
+            check_score = 20 if found else 0
+            scores[check_name] = check_score
+            total_score += check_score
+
+        passed = total_score >= 40
+
+        details = f"项目结构评分: {total_score}/100"
+        for check_name, score in scores.items():
+            status = "✅" if score > 0 else "❌"
+            details += f"\n  {status} {check_name}: {'通过' if score > 0 else '缺失'}"
+
+        return CheckResult(
+            item="项目结构",
+            passed=passed,
+            score=total_score,
             max_score=100,
             details=details
         )
@@ -151,6 +255,9 @@ class SolutionChecker:
             self.check_prd_alignment(content, prd_content),
             self.check_interface_clarity(content),
             self.check_tech_stack(content),
+            self.check_data_flow_design(content),
+            self.check_storage_design(content),
+            self.check_project_structure(content),
         ]
 
         total_score = sum(c.score for c in checks)

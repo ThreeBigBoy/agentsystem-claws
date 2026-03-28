@@ -129,7 +129,7 @@ class PRDChecker:
         )
 
     def check_traceability(self, content: str) -> CheckResult:
-        feature_pattern = re.compile(r"F\d+[:：]\s*\S+")
+        feature_pattern = re.compile(r"F-\d+")
         features = feature_pattern.findall(content)
 
         score = min(len(features) * 20, 100)
