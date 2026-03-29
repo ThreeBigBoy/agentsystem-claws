@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from llm_helper import LLMHelperMixin, GateResult as BaseGateResult
+
 
 @dataclass
 class CheckResult:
@@ -32,20 +34,11 @@ class CheckResult:
     details: str = ""
 
 
-@dataclass
-class GateResult:
-    gate_name: str
-    total_score: float
-    threshold: float
-    strictness: str
-    passed: bool
+class GateResult(BaseGateResult):
     checks: list[CheckResult] = field(default_factory=list)
-    llm_analysis: Optional[str] = None
-    llm_score: Optional[float] = None
-    source: Optional[str] = None
 
 
-class CodeChecker:
+class CodeChecker(LLMHelperMixin):
     def __init__(self, config_path: str = "config.yaml"):
         self.config = self._load_config(config_path)
         self.code_config = self.config.get("quality_gates", {}).get("code", {})
@@ -228,71 +221,17 @@ class CodeChecker:
         )
 
         if enable_llm:
-            result.llm_analysis, result.llm_score, result.source = self._llm_analysis(project_dir, user_input)
+            from llm_enhancer import LLMEnhancer
+            enhancer = LLMEnhancer()
+            result.llm_analysis, result.llm_score, result.source = self._llm_analysis(
+                enhancer.analyze_code, project_dir, project_dir, user_input=user_input
+            )
             python_weight = 0.95
             llm_weight = 0.05
             result.total_score = python_score_normalized * python_weight + result.llm_score * llm_weight
             result.passed = result.total_score >= threshold
 
         return result
-
-    def _llm_analysis(self, project_dir: str, user_input: str = "") -> tuple:
-        try:
-            from llm_enhancer import LLMEnhancer
-            enhancer = LLMEnhancer()
-            result = enhancer.analyze_code(project_dir, project_dir, user_input)
-            score = result.get("score", 80)
-            source = result.get("source", "unknown")
-            if result.get("source") == "api" and result.get("analysis"):
-                return result["analysis"], score, source
-            if result.get("source") == "agent" and result.get("analysis"):
-                return result["analysis"], score, source
-            return f"[{source.upper()}] {result.get('analysis', 'LLM 增强执行中')}", score, source
-        except Exception as e:
-            return f"[LLM 增强执行中] {str(e)}", 80, "error"
-
-
-def print_result(result: GateResult, verbose: bool = True):
-    print(f"\n{'='*60}")
-    print(f"🚪 {result.gate_name}")
-    print(f"{'='*60}")
-
-    status = "✅ 通过" if result.passed else "❌ 未通过"
-    print(f"总分: {result.total_score:.1f}/100 (阈值: {result.threshold})")
-    print(f"严格度: {result.strictness}")
-    print(f"状态: {status}")
-
-    if verbose:
-        print(f"\n检查项详情:")
-        for check in result.checks:
-            icon = "✅" if check.passed else "❌"
-            print(f"  {icon} [{check.score:.1f}] {check.item}")
-            if check.details:
-                for line in check.details.split("\n"):
-                    print(f"      {line}")
-
-    if result.llm_analysis:
-        is_prompt = result.llm_analysis.startswith("请以")
-        if is_prompt:
-            print(f"\n🤖 LLM 语义增强:")
-            print(f"   来源: Agent (需要用户触发)")
-            print(f"   当前评分: {result.llm_score:.1f}/100 (权重5%) [待语义评审后更新]")
-            print(f"\n{'='*60}")
-            print(f"📋 请复制以下 Prompt 发送给会话 Agent 执行语义评审:")
-            print(f"{'='*60}")
-            print(result.llm_analysis)
-            print(f"{'='*60}")
-            print(f"\n💡 Agent 评审完成后，请将结果回填以更新综合评分")
-        else:
-            print(f"\n🤖 LLM 语义增强:")
-            print(f"   来源: API")
-            if result.llm_score is not None:
-                print(f"   评分: {result.llm_score:.1f}/100 (权重5%)")
-            print(f"   详情:\n{result.llm_analysis}")
-
-    print(f"{'='*60}\n")
-
-    return 0 if result.passed else 1
 
 
 def _should_skip_llm(user_input: str = "") -> bool:
@@ -307,6 +246,7 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
     parser.add_argument("--llm", action="store_true", help="启用 LLM 语义增强（默认启用，除非命中 --skip-llm）")
     parser.add_argument("--skip-llm", action="store_true", help="跳过 LLM 语义增强，仅执行 Python 自动化检查")
+    parser.add_argument("--skip-skill-check", action="store_true", help="跳过 Skill 评审纪要检查（已确认跳过 Skill 评审）")
     parser.add_argument("--user-input", dest="user_input", default="", help="用户原始指令（用于自动判断是否跳过LLM）")
     parser.add_argument("--agent-score", type=float, help="回填 Agent 语义评审的实际分数（0-100）")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
@@ -316,6 +256,13 @@ def main():
 
     try:
         checker = CodeChecker(args.config)
+
+        if not args.skip_skill_check:
+            skill_warnings = checker._format_skill_review_warning("code", args.project_dir)
+            for w in skill_warnings:
+                print(w)
+            if not any("✅" in w for w in skill_warnings):
+                print()
 
         use_llm = not args.skip_llm and not _should_skip_llm(args.user_input)
 
@@ -339,22 +286,10 @@ def main():
             sys.exit(0 if result.passed else 1)
 
         if args.json:
-            output = {
-                "gate": result.gate_name,
-                "score": result.total_score,
-                "threshold": result.threshold,
-                "passed": result.passed,
-                "source": result.source,
-                "llm_analysis": result.llm_analysis,
-                "llm_score": result.llm_score,
-                "checks": [
-                    {"item": c.item, "passed": c.passed, "score": c.score, "details": c.details}
-                    for c in result.checks
-                ]
-            }
+            output = checker._format_json_output(result)
             print(json.dumps(output, ensure_ascii=False, indent=2))
         else:
-            exit_code = print_result(result, args.verbose)
+            exit_code = checker._print_result(result, args.verbose)
             sys.exit(exit_code)
 
     except Exception as e:

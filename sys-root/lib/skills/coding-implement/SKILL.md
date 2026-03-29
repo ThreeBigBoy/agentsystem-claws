@@ -160,3 +160,16 @@ description: 在 OpenSpec 项目中，根据已完成的需求分析与工程结
 
 通过本技能配合 `request-analysis` 与 `project-analysis`，可以打通「需求 → 结构 → 实现」全链路，让编码实现始终服从 OpenSpec 体系下的文档与约定。
 
+---
+
+## 七、经验沉淀
+
+> 详细经验见 [Memory: 质量门禁分层设计教训](file:///Users/billhu/agentsystem/sys-root/lib/memory/reflections/reflection-quality-gate-layer-design-lessons.md)
+
+### 核心原则（按需读取Memory扩展）
+
+1. **分层设计**：Layer1 (check_*.py) 管"是否使用LLM"，Layer2 (llm_enhancer) 管"Agent还是API"
+2. **DRY原则**：共同逻辑抽象到 `llm_helper.py`
+3. **Prompt传递**：Agent模式传路径，API模式传内容
+4. **测试设计**：基于架构设计，分层独立验证
+
