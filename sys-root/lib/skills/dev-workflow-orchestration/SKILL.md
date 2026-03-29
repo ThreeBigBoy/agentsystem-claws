@@ -50,7 +50,7 @@ description: 流程编排与自主推进技能；当用户提出涉及 change-id
 | **Step 5 编码实现** | 方案评审「通过」+Gate-DESIGN确认 | 规范遵循、自检完成、可测试性、tasks更新 | 自检通过后进入Step 6 |
 | **Step 6 代码评审** | Step 5完成 | 评审执行、纪要、问题分级、**判定为「通过」**、修复循环 | **只有「通过」才能进Step 7** |
 | **Step 7 功能验收** | Step 6通过 | validate两轮、测试执行、记录、**判定为「通过」** | **只有「通过」才能进Step 8** |
-| **Step 8 归档** | Step 7通过 | 术语检查、tasks更新、specs合并、archive移动 | 全部通过后进入Step 9 |
+| **Step 8 归档** | Step 7通过 | 术语检查、tasks更新、**specs合并 → `openspec/specs/`（能力基线）**、archive移动 | 全部通过后进入Step 9 |
 | **Step 9 复盘** | Step 8完成 | 复盘执行、报告产出、memory沉淀 | 触发条件满足时执行 |
 | **Step 10 全局联动** | Step 9完成 | 影响分析20项检查 | **全部20项通过才能闭环完成** |
 

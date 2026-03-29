@@ -170,7 +170,7 @@ openspec/
 
 - **Planning**：见第六节；`openspec validate` 校验变更结构。  
 - **Implementation**：按 tasks；重大决策已体现在 `proposal.md`、变更目录内 **`design.md`**（技术方案文件，非名为 `design/` 的磁盘目录）、`specs/`。  
-- **Archiving**：**仅**在 **第二节 Step 10** 执行（含合并 specs、移动/归档 changes）；命令见下节。
+- **Archiving**：**仅**在 **第二节 Step 10** 执行。**必须操作**：① **specs 合并到 `openspec/specs/`（能力基线）**；② 移动/归档 changes 至 `openspec/changes/archive/`。命令见下节。
 
 ---
 
