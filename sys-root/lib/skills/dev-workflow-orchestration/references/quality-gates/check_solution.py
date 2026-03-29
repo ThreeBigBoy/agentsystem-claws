@@ -43,6 +43,7 @@ class GateResult:
     warnings: list[str] = field(default_factory=list)
     llm_analysis: Optional[str] = None
     llm_score: Optional[float] = None
+    source: Optional[str] = None
 
 
 class SolutionChecker:
@@ -287,7 +288,7 @@ class SolutionChecker:
         )
 
         if enable_llm:
-            result.llm_analysis, result.llm_score = self._llm_analysis(content, prd_content, file_path, user_input)
+            result.llm_analysis, result.llm_score, result.source = self._llm_analysis(content, prd_content, file_path, user_input)
             python_weight = 0.7
             llm_weight = 0.3
             result.total_score = python_score_normalized * python_weight + result.llm_score * llm_weight
@@ -301,13 +302,14 @@ class SolutionChecker:
             enhancer = LLMEnhancer()
             result = enhancer.analyze_solution(content, file_path, prd_content, user_input)
             score = result.get("score", 80)
+            source = result.get("source", "unknown")
             if result.get("source") == "api" and result.get("analysis"):
-                return result["analysis"], score
+                return result["analysis"], score, source
             if result.get("source") == "agent" and result.get("analysis"):
-                return result["analysis"], score
-            return f"[{result.get('source', 'unknown').upper()}] {result.get('analysis', 'LLM 增强执行中')}", score
+                return result["analysis"], score, source
+            return f"[{source.upper()}] {result.get('analysis', 'LLM 增强执行中')}", score, source
         except Exception as e:
-            return f"[LLM 增强执行中] {str(e)}", 80
+            return f"[LLM 增强执行中] {str(e)}", 80, "error"
 
 
 def print_result(result: GateResult, verbose: bool = True):
@@ -408,6 +410,7 @@ def main():
                 "score": result.total_score,
                 "threshold": result.threshold,
                 "passed": result.passed,
+                "source": result.source,
                 "llm_analysis": result.llm_analysis,
                 "llm_score": result.llm_score,
                 "warnings": result.warnings,

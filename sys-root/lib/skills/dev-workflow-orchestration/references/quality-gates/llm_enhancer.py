@@ -161,22 +161,14 @@ python check_prd.py "{file_path}" --agent-score 85
 {prd_ref}"""
 
     def _get_solution_review_prompt(self, content: str = "", file_path: str = "") -> str:
-        if file_path:
-            cmd_hint = f"""
+        if content:
+            content_ref = f"""
+## 技术方案内容
 ---
-## 📋 评审完成后
-
-请执行以下命令回填分数：
-
-```bash
-python check_solution.py "{file_path}" --agent-score <你给出的总分>
-```
-
-例如：若你评分为80分，则执行：
-```bash
-python check_solution.py "{file_path}" --agent-score 80
-```
+{content[:8000]}
+---
 """
+        elif file_path:
             content_ref = f"""
 ## 技术方案文件路径
 
@@ -185,13 +177,22 @@ python check_solution.py "{file_path}" --agent-score 80
 **文件路径**：`{file_path}`
 """
         else:
-            cmd_hint = ""
-            content_ref = f"""
+            content_ref = """
 ## 技术方案内容
----
-{content}
----
+
+（未提供技术方案内容）
 """
+
+        cmd_hint = f"""
+---
+## 📋 评审完成后
+
+请执行以下命令回填分数：
+
+```bash
+python check_solution.py "{file_path}" --agent-score <你给出的总分>
+```
+""" if file_path else ""
         return f"""请以资深架构师身份评审以下技术方案。
 
 评审维度：
@@ -326,7 +327,7 @@ python check_code.py "{file_path}" --agent-score 85
         if prd_content:
             full_content = f"## PRD 内容\n{prd_content[:1500]}\n\n## 技术方案\n{content}"
 
-        prompt = self._get_solution_review_prompt(full_content, file_path)
+        prompt = self._get_solution_review_prompt(full_content)
 
         api_result = self._call_api(model_id, prompt, "solution_review")
         if api_result:
