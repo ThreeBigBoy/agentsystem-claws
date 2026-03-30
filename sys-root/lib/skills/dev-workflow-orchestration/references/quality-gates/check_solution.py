@@ -77,31 +77,75 @@ class SolutionChecker(LLMHelperMixin):
             details=details
         )
 
+    def _has_param_definition(self, content: str) -> bool:
+        """检查是否有参数定义（表格或列表形式）"""
+        patterns = [
+            r"入参[：:]", r"参数[：:].*\{", r"params.*\{",
+            r"\w+\s*\?\s*:", r"参数类型"
+        ]
+        return any(re.search(p, content) for p in patterns)
+
+    def _has_response_definition(self, content: str) -> bool:
+        """检查是否有返回值定义"""
+        patterns = [
+            r"返回值[：:]", r"返回[：:].*\{", r"response.*\{",
+            r"\{[^}]*,[^}]*\}", r"返回结构"
+        ]
+        return any(re.search(p, content) for p in patterns)
+
+    def _has_error_codes(self, content: str) -> bool:
+        """检查是否有错误码体系"""
+        patterns = [
+            r"错误码", r"error.*code", r"code.*\d{4}",
+            r"1001|1002|2001|2002", r"异常码"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
+    def _has_code_example(self, content: str) -> bool:
+        """检查是否有代码示例"""
+        patterns = [
+            r"```javascript", r"```js", r"```json",
+            r"function\s+\w+", r"Page\s*\(", r"const\s+\w+\s*="
+        ]
+        return any(re.search(p, content) for p in patterns)
+
     def check_interface_clarity(self, content: str) -> CheckResult:
         has_interface_def = any(kw in content for kw in ["接口", "API", "endpoint", "/api/"])
         has_params = any(kw in content for kw in ["参数", "params", "request", "response"])
         has_field_def = "字段" in content or "field" in content.lower()
 
-        score = 0
+        depth_checks = {
+            "接口定义": has_interface_def,
+            "参数定义": self._has_param_definition(content),
+            "返回值定义": self._has_response_definition(content),
+            "错误码体系": self._has_error_codes(content),
+            "代码示例": self._has_code_example(content),
+        }
+
+        base_score = 0
         if has_interface_def:
-            score += 40
+            base_score += 40
         if has_params:
-            score += 30
+            base_score += 30
         if has_field_def:
-            score += 30
+            base_score += 30
+
+        depth_score = sum(20 for v in depth_checks.values() if v) // 2
+        score = min(base_score + depth_score, 100)
 
         passed = score >= 60
 
         details = f"接口定义得分: {score}/100"
         found = []
-        if has_interface_def:
-            found.append("接口定义")
+        for name, exists in depth_checks.items():
+            status = "✅" if exists else "❌"
+            details += f"\n  {status} {name}"
         if has_params:
             found.append("参数定义")
         if has_field_def:
             found.append("字段定义")
         if found:
-            details += f"\n找到: {', '.join(found)}"
+            details += f"\n基础项: {', '.join(found)}"
 
         return CheckResult(
             item="接口定义清晰",
@@ -144,11 +188,41 @@ class SolutionChecker(LLMHelperMixin):
             details=details
         )
 
+    def _has_state_definition(self, content: str) -> bool:
+        """检查是否有状态定义"""
+        patterns = [
+            r"state", r"状态", r"data\s*:", r"状态管理",
+            r"setData", r"this\.data"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
+    def _has_cache_strategy(self, content: str) -> bool:
+        """检查是否有缓存策略"""
+        patterns = [
+            r"缓存", r"cache", r"过期", r"TTL", r"有效期",
+            r"分钟缓存", r"小时缓存"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
+    def _has_cross_page_dataflow(self, content: str) -> bool:
+        """检查是否有跨页面数据流描述"""
+        patterns = [
+            r"页面.*数据", r"数据.*页面", r"页面间", r"跳转",
+            r"onLoad", r"onShow", r"TabBar.*切换"
+        ]
+        return any(re.search(p, content) for p in patterns)
+
     def check_data_flow_design(self, content: str) -> CheckResult:
         quality_checks = {
             "数据流描述": ["数据流", "流向", "流程"],
             "模块间接口": ["接口", "调用", "交互"],
             "输入输出定义": ["输入", "输出", "参数", "返回值"],
+        }
+
+        depth_checks = {
+            "状态管理": self._has_state_definition(content),
+            "缓存策略": self._has_cache_strategy(content),
+            "跨页面数据流": self._has_cross_page_dataflow(content),
         }
 
         scores = {}
@@ -160,12 +234,18 @@ class SolutionChecker(LLMHelperMixin):
             scores[check_name] = check_score
             total_score += check_score
 
-        passed = total_score >= 40
+        depth_score = sum(10 for v in depth_checks.values() if v)
+        total_score = min(total_score + depth_score, 100)
+
+        passed = total_score >= 50
 
         details = f"数据流设计评分: {total_score}/100"
         for check_name, score in scores.items():
             status = "✅" if score > 0 else "❌"
             details += f"\n  {status} {check_name}: {'通过' if score > 0 else '缺失'}"
+        for check_name, exists in depth_checks.items():
+            status = "✅" if exists else "○"
+            details += f"\n  {status} {check_name}: {'有' if exists else '无'}"
 
         return CheckResult(
             item="数据流设计",
@@ -175,11 +255,42 @@ class SolutionChecker(LLMHelperMixin):
             details=details
         )
 
+    def _has_storage_key_spec(self, content: str) -> bool:
+        """检查是否有Storage Key规范"""
+        patterns = [
+            r"storage.*key", r"Storage.*Key", r"storage.*key.*规范",
+            r"user_stats", r"qa_history", r"task_progress",
+            r"`.*`.*:.*Object", r"key.*命名"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
+    def _has_migration_strategy(self, content: str) -> bool:
+        """检查是否有数据迁移策略"""
+        patterns = [
+            r"迁移", r"migration", r"版本.*升级", r"字段兼容",
+            r"版本号检测", r"v0\.1beta.*v0\.1\.1"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
+    def _has_recovery_mechanism(self, content: str) -> bool:
+        """检查是否有数据恢复机制"""
+        patterns = [
+            r"恢复", r"recover", r"默认数据", r"fallback",
+            r"validateData", r"数据恢复"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
     def check_storage_design(self, content: str) -> CheckResult:
         quality_checks = {
             "存储结构定义": ["存储", "数据结构", "storage"],
             "容量控制策略": ["容量", "限制", "清理", "自动清理"],
             "数据安全措施": ["安全", "加密", "隐私"],
+        }
+
+        depth_checks = {
+            "Storage Key规范": self._has_storage_key_spec(content),
+            "数据迁移策略": self._has_migration_strategy(content),
+            "数据恢复机制": self._has_recovery_mechanism(content),
         }
 
         scores = {}
@@ -191,12 +302,18 @@ class SolutionChecker(LLMHelperMixin):
             scores[check_name] = check_score
             total_score += check_score
 
-        passed = total_score >= 40
+        depth_score = sum(10 for v in depth_checks.values() if v)
+        total_score = min(total_score + depth_score, 100)
+
+        passed = total_score >= 50
 
         details = f"存储设计评分: {total_score}/100"
         for check_name, score in scores.items():
             status = "✅" if score > 0 else "❌"
             details += f"\n  {status} {check_name}: {'通过' if score > 0 else '缺失'}"
+        for check_name, exists in depth_checks.items():
+            status = "✅" if exists else "○"
+            details += f"\n  {status} {check_name}: {'有' if exists else '无'}"
 
         return CheckResult(
             item="存储设计",
@@ -206,11 +323,44 @@ class SolutionChecker(LLMHelperMixin):
             details=details
         )
 
+    def _has_naming_convention(self, content: str) -> bool:
+        """检查是否有命名规范"""
+        patterns = [
+            r"命名规范", r"命名.*小写", r"变量名.*驼峰",
+            r"camelCase", r" PascalCase", r"kebab-case",
+            r"组件名.*中划线", r"文件名.*小写"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
+    def _has_component_design(self, content: str) -> bool:
+        """检查是否有组件设计"""
+        patterns = [
+            r"组件.*设计", r"component", r"components/",
+            r"question-card", r"task-card", r"badge-item",
+            r"公共组件"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
+    def _has_tool_class_design(self, content: str) -> bool:
+        """检查是否有工具类设计"""
+        patterns = [
+            r"工具类", r"utils/", r"工具.*职责",
+            r"mock\.js", r"storage\.js", r"helpers\.js",
+            r"公共方法", r"公共函数"
+        ]
+        return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+
     def check_project_structure(self, content: str) -> CheckResult:
         quality_checks = {
             "目录结构": ["目录", "结构", "文件夹"],
             "模块划分": ["模块", "pages", "components", "utils"],
             "规范遵循": ["规范", "规则", "遵循"],
+        }
+
+        depth_checks = {
+            "命名规范": self._has_naming_convention(content),
+            "组件设计": self._has_component_design(content),
+            "工具类设计": self._has_tool_class_design(content),
         }
 
         scores = {}
@@ -222,12 +372,18 @@ class SolutionChecker(LLMHelperMixin):
             scores[check_name] = check_score
             total_score += check_score
 
-        passed = total_score >= 40
+        depth_score = sum(10 for v in depth_checks.values() if v)
+        total_score = min(total_score + depth_score, 100)
+
+        passed = total_score >= 50
 
         details = f"项目结构评分: {total_score}/100"
         for check_name, score in scores.items():
             status = "✅" if score > 0 else "❌"
             details += f"\n  {status} {check_name}: {'通过' if score > 0 else '缺失'}"
+        for check_name, exists in depth_checks.items():
+            status = "✅" if exists else "○"
+            details += f"\n  {status} {check_name}: {'有' if exists else '无'}"
 
         return CheckResult(
             item="项目结构",
