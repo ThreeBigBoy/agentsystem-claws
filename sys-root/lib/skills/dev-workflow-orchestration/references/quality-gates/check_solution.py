@@ -54,7 +54,7 @@ class SolutionChecker(LLMHelperMixin):
     def check_prd_alignment(self, content: str, prd_content: Optional[str] = None) -> CheckResult:
         prd_features = []
         if prd_content:
-            feature_pattern = re.compile(r"F-\d+")
+            feature_pattern = re.compile(r"F-\d+(?:\.\d{1,2})?")
             prd_features = feature_pattern.findall(prd_content)
 
         matched_features = []

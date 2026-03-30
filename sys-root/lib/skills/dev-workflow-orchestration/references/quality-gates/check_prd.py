@@ -127,7 +127,7 @@ class PRDChecker(LLMHelperMixin):
         )
 
     def check_traceability(self, content: str) -> CheckResult:
-        feature_pattern = re.compile(r"F-\d+")
+        feature_pattern = re.compile(r"F-\d+(?:\.\d{1,2})?")
         features = feature_pattern.findall(content)
 
         score = min(len(features) * 20, 100)
